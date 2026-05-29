@@ -1,2 +1,8 @@
 [phases.setup]
-nixPkgs = ['nodejs_18', 'python3', 'gcc', 'gnumake', 'pkg-config', 'sqlite', 'vips', 'glib', 'expat']
+nixPkgs = ['nodejs_18', 'python3', 'gcc', 'gnumake', 'pkg-config', 'sqlite', 'vips', 'glib', 'expat', 'libheif']
+
+[phases.install]
+cmds = ['cd backend && npm install', 'cd frontend && npm install']
+
+[phases.build]
+cmds = ['cd frontend && npm run build']
