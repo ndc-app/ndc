@@ -24,7 +24,7 @@ app.use(cors())
 app.use(express.json({ limit: '20mb' }))
 
 // ── Uploads ──────────────────────────────────────────────────────────────────
-const uploadsDir = path.join(__dirname, 'uploads')
+const uploadsDir = path.join(dataDir, 'uploads')
 const materialesDir = path.join(uploadsDir, 'materiales')
 const participantesDir = path.join(uploadsDir, 'participantes')
 const hitosDir = path.join(uploadsDir, 'hitos')
