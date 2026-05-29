@@ -17,6 +17,7 @@ function authFetch(url, options = {}) {
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -64,7 +65,10 @@ function LoginPage({ onLogin }) {
           </div>
           <div>
             <label style={{ fontSize: 12, color: '#555', display: 'block', marginBottom: 5 }}>Contraseña</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required style={inp} />
+            <div style={{ position: 'relative' }}>
+              <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required style={{ ...inp, paddingRight: 40 }} />
+              <button type="button" onClick={() => setShowPass(s => !s)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#888', lineHeight: 1 }}>{showPass ? '🙈' : '👁️'}</button>
+            </div>
           </div>
           {error && <div style={{ fontSize: 12, color: '#c00', background: '#fff0f0', padding: '8px 12px', borderRadius: 6 }}>{error}</div>}
           <button type="submit" disabled={loading} style={{
