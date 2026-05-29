@@ -250,6 +250,15 @@ seccionesBase.forEach((s,i) => {
   db.prepare('INSERT OR IGNORE INTO ndc_secciones (id,nombre,icono,orden) VALUES (?,?,?,?)').run(i+1, s.nombre, s.icono, s.orden)
 })
 
+// Seed admin por defecto si no hay usuarios
+if (db.prepare('SELECT COUNT(*) as n FROM usuarios').get().n === 0) {
+  const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    || 'gastondelcorral@gmail.com'
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
+  const hash = bcrypt.hashSync(ADMIN_PASSWORD, 10)
+  db.prepare('INSERT INTO usuarios (nombre,email,password_hash,rol) VALUES (?,?,?,?)').run('Gastón', ADMIN_EMAIL, hash, 'admin')
+  console.log(`✓ Admin creado: ${ADMIN_EMAIL}`)
+}
+
 // ══════════════════════════════════════════════════════
 // AUTH MIDDLEWARE
 // ══════════════════════════════════════════════════════
