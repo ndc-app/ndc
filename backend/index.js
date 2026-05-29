@@ -7,6 +7,7 @@ const bcrypt   = require('bcryptjs')
 const jwt      = require('jsonwebtoken')
 const multer   = require('multer')
 const sharp    = require('sharp')
+const heicConvert = require('heic-convert')
 
 const app  = express()
 const PORT = process.env.PORT || 3010
@@ -463,7 +464,13 @@ app.post('/api/ndc/participantes/:id/foto', requireAuth, uploadParticipante.sing
   try {
     if (!req.file) return res.status(400).json({ error: 'Sin archivo' })
     const filename = `p_${req.params.id}_${Date.now()}.jpg`
-    await sharp(req.file.buffer).resize(300, 300, { fit:'cover' }).jpeg({ quality:80 }).toFile(path.join(participantesDir, filename))
+    let imgBuffer = req.file.buffer
+    const isHeic = req.file.mimetype === 'image/heic' || req.file.mimetype === 'image/heif' ||
+                   /\.(heic|heif)$/i.test(req.file.originalname || '')
+    if (isHeic) {
+      imgBuffer = Buffer.from(await heicConvert({ buffer: imgBuffer, format: 'JPEG', quality: 0.9 }))
+    }
+    await sharp(imgBuffer).resize(300, 300, { fit:'cover' }).jpeg({ quality:80 }).toFile(path.join(participantesDir, filename))
     const prev = db.prepare('SELECT foto_url FROM ndc_participantes WHERE id=?').get(req.params.id)
     if (prev?.foto_url) { try { fs.unlinkSync(path.join(participantesDir, path.basename(prev.foto_url))) } catch(e) {} }
     db.prepare('UPDATE ndc_participantes SET foto_url=? WHERE id=?').run(`/uploads/participantes/${filename}`, req.params.id)

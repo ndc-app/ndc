@@ -260,17 +260,8 @@ function FotoParticipante({ participante: p, onFotoChange }) {
     if (!file) return
     setSubiendo(true)
     try {
-      const esHeic = /\.(heic|heif)$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif'
-      let foto
-      try {
-        foto = await convertirAJpeg(file)
-      } catch(_) {
-        if (esHeic) {
-          alert('El formato HEIC no está soportado. Desde la galería del iPhone elegí "Opciones" → "Formato más compatible" para enviar en JPG.')
-          return
-        }
-        foto = file
-      }
+      let foto = file
+      try { foto = await convertirAJpeg(file) } catch(_) {}
       const fd = new FormData()
       fd.append('foto', foto)
       const r = await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto`, { method:'POST', body:fd }).then(r=>r.json())
@@ -297,7 +288,7 @@ function FotoParticipante({ participante: p, onFotoChange }) {
 
   return (
     <>
-      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display:'none' }} onChange={subirFoto} />
+      <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{ display:'none' }} onChange={subirFoto} />
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, flexShrink:0 }}>
         {fotoSrc
           ? <div style={{ position:'relative', width:52, height:70, borderRadius:6, overflow:'hidden', cursor:'pointer' }} onClick={() => setMenuAbierto(m => !m)}>
