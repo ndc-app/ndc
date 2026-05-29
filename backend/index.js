@@ -256,6 +256,20 @@ seccionesBase.forEach((s,i) => {
   db.prepare('INSERT OR IGNORE INTO ndc_secciones (id,nombre,icono,orden) VALUES (?,?,?,?)').run(i+1, s.nombre, s.icono, s.orden)
 })
 
+// Historial de cambios
+db.prepare(`CREATE TABLE IF NOT EXISTS ndc_historial (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuario_id INTEGER NOT NULL,
+  usuario_nombre TEXT NOT NULL,
+  accion TEXT NOT NULL,
+  tabla TEXT NOT NULL,
+  registro_id INTEGER,
+  datos_antes TEXT,
+  datos_despues TEXT,
+  revertido INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+)`).run()
+
 // Seed admin por defecto si no hay usuarios
 if (db.prepare('SELECT COUNT(*) as n FROM usuarios').get().n === 0) {
   const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    || 'gastondelcorral@gmail.com'
@@ -284,6 +298,15 @@ function requireAdmin(req, res, next) {
     if (req.user?.rol !== 'admin') return res.status(403).json({ error: 'Solo admin' })
     next()
   })
+}
+
+function logCambio(req, accion, tabla, registroId, datosAntes, datosDespues) {
+  try {
+    db.prepare('INSERT INTO ndc_historial (usuario_id,usuario_nombre,accion,tabla,registro_id,datos_antes,datos_despues) VALUES (?,?,?,?,?,?,?)')
+      .run(req.user?.id||0, req.user?.nombre||'Sistema', accion, tabla, registroId||null,
+           datosAntes ? JSON.stringify(datosAntes) : null,
+           datosDespues ? JSON.stringify(datosDespues) : null)
+  } catch(e) {}
 }
 
 // ══════════════════════════════════════════════════════
@@ -446,17 +469,25 @@ app.post('/api/ndc/participantes', requireAuth, (req, res) => {
   const b = req.body
   const r = db.prepare('INSERT INTO ndc_participantes (camada_id,apodo,nombre,apellido,dni,edad,escuela,padre_madre,responsable,contacto_responsable,tutor_mail,telefono,email,testimonio,comentario) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(b.camada_id,b.apodo||'',b.nombre,b.apellido,b.dni,b.edad,b.escuela,b.padre_madre,b.responsable,b.contacto_responsable,b.tutor_mail,b.telefono,b.email,b.testimonio,b.comentario||'')
+  logCambio(req, 'crear_participante', 'ndc_participantes', r.lastInsertRowid, null, { id:r.lastInsertRowid, nombre:b.nombre, apellido:b.apellido, apodo:b.apodo, camada_id:b.camada_id })
   res.json({ ok:true, id:r.lastInsertRowid })
 })
 
 app.put('/api/ndc/participantes/:id', requireAuth, (req, res) => {
   const b = req.body
+  const antes = db.prepare('SELECT * FROM ndc_participantes WHERE id=?').get(req.params.id)
   db.prepare('UPDATE ndc_participantes SET apodo=?,nombre=?,apellido=?,dni=?,edad=?,escuela=?,padre_madre=?,responsable=?,contacto_responsable=?,tutor_mail=?,telefono=?,email=?,asistencias=?,total_encuentros=?,testimonio=?,activo=?,egresado=?,comentario=? WHERE id=?')
     .run(b.apodo||'',b.nombre,b.apellido,b.dni,b.edad,b.escuela,b.padre_madre,b.responsable,b.contacto_responsable,b.tutor_mail,b.telefono,b.email,b.asistencias,b.total_encuentros,b.testimonio,b.activo,b.egresado||0,b.comentario||'',req.params.id)
+  logCambio(req, 'editar_participante', 'ndc_participantes', req.params.id, antes, b)
   res.json({ ok:true })
 })
 
-app.delete('/api/ndc/participantes/:id', requireAuth, (req, res) => { db.prepare('DELETE FROM ndc_participantes WHERE id=?').run(req.params.id); res.json({ok:true}) })
+app.delete('/api/ndc/participantes/:id', requireAuth, (req, res) => {
+  const antes = db.prepare('SELECT * FROM ndc_participantes WHERE id=?').get(req.params.id)
+  db.prepare('DELETE FROM ndc_participantes WHERE id=?').run(req.params.id)
+  logCambio(req, 'eliminar_participante', 'ndc_participantes', req.params.id, antes, null)
+  res.json({ok:true})
+})
 
 // Foto de participante
 const uploadParticipante = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
@@ -500,26 +531,26 @@ app.post('/api/ndc/participantes/reorder', requireAuth, (req, res) => {
 
 // ── Escuelas ──────────────────────────────────────────────────────────────────
 app.get('/api/ndc/escuelas', requireAuth, (req, res) => res.json(req.query.camada_id ? db.prepare('SELECT * FROM ndc_escuelas WHERE camada_id=? ORDER BY nombre').all(req.query.camada_id) : db.prepare('SELECT * FROM ndc_escuelas ORDER BY nombre').all()))
-app.post('/api/ndc/escuelas', requireAuth, (req, res) => { const b = req.body; const r = db.prepare('INSERT INTO ndc_escuelas (camada_id,nombre,direccion,localidad,referente_nombre,referente_tel,referente_email,notas) VALUES (?,?,?,?,?,?,?,?)').run(b.camada_id,b.nombre,b.direccion,b.localidad,b.referente_nombre,b.referente_tel,b.referente_email,b.notas); res.json({ok:true,id:r.lastInsertRowid}) })
-app.put('/api/ndc/escuelas/:id', requireAuth, (req, res) => { const b = req.body; db.prepare('UPDATE ndc_escuelas SET nombre=?,direccion=?,localidad=?,referente_nombre=?,referente_tel=?,referente_email=?,notas=? WHERE id=?').run(b.nombre,b.direccion,b.localidad,b.referente_nombre,b.referente_tel,b.referente_email,b.notas,req.params.id); res.json({ok:true}) })
-app.delete('/api/ndc/escuelas/:id', requireAuth, (req, res) => { db.prepare('DELETE FROM ndc_escuelas WHERE id=?').run(req.params.id); res.json({ok:true}) })
+app.post('/api/ndc/escuelas', requireAuth, (req, res) => { const b = req.body; const r = db.prepare('INSERT INTO ndc_escuelas (camada_id,nombre,direccion,localidad,referente_nombre,referente_tel,referente_email,notas) VALUES (?,?,?,?,?,?,?,?)').run(b.camada_id,b.nombre,b.direccion,b.localidad,b.referente_nombre,b.referente_tel,b.referente_email,b.notas); logCambio(req,'crear_escuela','ndc_escuelas',r.lastInsertRowid,null,{id:r.lastInsertRowid,nombre:b.nombre}); res.json({ok:true,id:r.lastInsertRowid}) })
+app.put('/api/ndc/escuelas/:id', requireAuth, (req, res) => { const b = req.body; const antes = db.prepare('SELECT * FROM ndc_escuelas WHERE id=?').get(req.params.id); db.prepare('UPDATE ndc_escuelas SET nombre=?,direccion=?,localidad=?,referente_nombre=?,referente_tel=?,referente_email=?,notas=? WHERE id=?').run(b.nombre,b.direccion,b.localidad,b.referente_nombre,b.referente_tel,b.referente_email,b.notas,req.params.id); logCambio(req,'editar_escuela','ndc_escuelas',req.params.id,antes,b); res.json({ok:true}) })
+app.delete('/api/ndc/escuelas/:id', requireAuth, (req, res) => { const antes = db.prepare('SELECT * FROM ndc_escuelas WHERE id=?').get(req.params.id); db.prepare('DELETE FROM ndc_escuelas WHERE id=?').run(req.params.id); logCambio(req,'eliminar_escuela','ndc_escuelas',req.params.id,antes,null); res.json({ok:true}) })
 
 // ── Encuentros ────────────────────────────────────────────────────────────────
 app.get('/api/ndc/encuentros', requireAuth, (req, res) => res.json(req.query.camada_id ? db.prepare('SELECT * FROM ndc_encuentros WHERE camada_id=? ORDER BY fecha DESC').all(req.query.camada_id) : db.prepare('SELECT * FROM ndc_encuentros ORDER BY fecha DESC').all()))
-app.post('/api/ndc/encuentros', requireAuth, (req, res) => { const r = db.prepare('INSERT INTO ndc_encuentros (camada_id,fecha,actividad,presentes,notas) VALUES (?,?,?,?,?)').run(req.body.camada_id,req.body.fecha,req.body.actividad,req.body.presentes||0,req.body.notas); res.json({ok:true,id:r.lastInsertRowid}) })
-app.delete('/api/ndc/encuentros/:id', requireAuth, (req, res) => { db.prepare('DELETE FROM ndc_encuentros WHERE id=?').run(req.params.id); res.json({ok:true}) })
+app.post('/api/ndc/encuentros', requireAuth, (req, res) => { const b = req.body; const r = db.prepare('INSERT INTO ndc_encuentros (camada_id,fecha,actividad,presentes,notas) VALUES (?,?,?,?,?)').run(b.camada_id,b.fecha,b.actividad,b.presentes||0,b.notas); logCambio(req,'crear_encuentro','ndc_encuentros',r.lastInsertRowid,null,{id:r.lastInsertRowid,fecha:b.fecha,actividad:b.actividad}); res.json({ok:true,id:r.lastInsertRowid}) })
+app.delete('/api/ndc/encuentros/:id', requireAuth, (req, res) => { const antes = db.prepare('SELECT * FROM ndc_encuentros WHERE id=?').get(req.params.id); db.prepare('DELETE FROM ndc_encuentros WHERE id=?').run(req.params.id); logCambio(req,'eliminar_encuentro','ndc_encuentros',req.params.id,antes,null); res.json({ok:true}) })
 
 // ── Hitos ─────────────────────────────────────────────────────────────────────
 app.get('/api/ndc/hitos', requireAuth, (req, res) => res.json(req.query.camada_id ? db.prepare('SELECT * FROM ndc_hitos WHERE camada_id=? ORDER BY fecha').all(req.query.camada_id) : db.prepare('SELECT * FROM ndc_hitos ORDER BY fecha').all()))
-app.post('/api/ndc/hitos', requireAuth, (req, res) => { const r = db.prepare('INSERT INTO ndc_hitos (camada_id,tipo,titulo,fecha,lugar,descripcion,imagen_url) VALUES (?,?,?,?,?,?,?)').run(req.body.camada_id,req.body.tipo,req.body.titulo,req.body.fecha,req.body.lugar,req.body.descripcion,req.body.imagen_url); res.json({ok:true,id:r.lastInsertRowid}) })
-app.put('/api/ndc/hitos/:id', requireAuth, (req, res) => { const b = req.body; db.prepare('UPDATE ndc_hitos SET tipo=?,titulo=?,fecha=?,lugar=?,descripcion=? WHERE id=?').run(b.tipo,b.titulo,b.fecha,b.lugar,b.descripcion,req.params.id); res.json({ok:true}) })
-app.delete('/api/ndc/hitos/:id', requireAuth, (req, res) => { db.prepare('DELETE FROM ndc_hitos WHERE id=?').run(req.params.id); res.json({ok:true}) })
+app.post('/api/ndc/hitos', requireAuth, (req, res) => { const b = req.body; const r = db.prepare('INSERT INTO ndc_hitos (camada_id,tipo,titulo,fecha,lugar,descripcion,imagen_url) VALUES (?,?,?,?,?,?,?)').run(b.camada_id,b.tipo,b.titulo,b.fecha,b.lugar,b.descripcion,b.imagen_url); logCambio(req,'crear_hito','ndc_hitos',r.lastInsertRowid,null,{id:r.lastInsertRowid,titulo:b.titulo}); res.json({ok:true,id:r.lastInsertRowid}) })
+app.put('/api/ndc/hitos/:id', requireAuth, (req, res) => { const b = req.body; const antes = db.prepare('SELECT * FROM ndc_hitos WHERE id=?').get(req.params.id); db.prepare('UPDATE ndc_hitos SET tipo=?,titulo=?,fecha=?,lugar=?,descripcion=? WHERE id=?').run(b.tipo,b.titulo,b.fecha,b.lugar,b.descripcion,req.params.id); logCambio(req,'editar_hito','ndc_hitos',req.params.id,antes,b); res.json({ok:true}) })
+app.delete('/api/ndc/hitos/:id', requireAuth, (req, res) => { const antes = db.prepare('SELECT * FROM ndc_hitos WHERE id=?').get(req.params.id); db.prepare('DELETE FROM ndc_hitos WHERE id=?').run(req.params.id); logCambio(req,'eliminar_hito','ndc_hitos',req.params.id,antes,null); res.json({ok:true}) })
 app.patch('/api/ndc/hitos/:id/posicion', requireAuth, (req, res) => { db.prepare('UPDATE ndc_hitos SET imagen_posicion=? WHERE id=?').run(req.body.posicion||'50% 50%', req.params.id); res.json({ok:true}) })
 
 // ── Presupuesto ───────────────────────────────────────────────────────────────
 app.get('/api/ndc/presupuesto', requireAuth, (req, res) => res.json(req.query.camada_id ? db.prepare('SELECT * FROM ndc_presupuesto WHERE camada_id=? ORDER BY fecha DESC').all(req.query.camada_id) : db.prepare('SELECT * FROM ndc_presupuesto ORDER BY fecha DESC').all()))
-app.post('/api/ndc/presupuesto', requireAuth, (req, res) => { const r = db.prepare('INSERT INTO ndc_presupuesto (camada_id,categoria,descripcion,monto,tipo,fecha) VALUES (?,?,?,?,?,?)').run(req.body.camada_id,req.body.categoria,req.body.descripcion,req.body.monto||0,req.body.tipo||'gasto',req.body.fecha); res.json({ok:true,id:r.lastInsertRowid}) })
-app.delete('/api/ndc/presupuesto/:id', requireAuth, (req, res) => { db.prepare('DELETE FROM ndc_presupuesto WHERE id=?').run(req.params.id); res.json({ok:true}) })
+app.post('/api/ndc/presupuesto', requireAuth, (req, res) => { const b = req.body; const r = db.prepare('INSERT INTO ndc_presupuesto (camada_id,categoria,descripcion,monto,tipo,fecha) VALUES (?,?,?,?,?,?)').run(b.camada_id,b.categoria,b.descripcion,b.monto||0,b.tipo||'gasto',b.fecha); logCambio(req,'crear_presupuesto','ndc_presupuesto',r.lastInsertRowid,null,{id:r.lastInsertRowid,descripcion:b.descripcion,monto:b.monto,tipo:b.tipo}); res.json({ok:true,id:r.lastInsertRowid}) })
+app.delete('/api/ndc/presupuesto/:id', requireAuth, (req, res) => { const antes = db.prepare('SELECT * FROM ndc_presupuesto WHERE id=?').get(req.params.id); db.prepare('DELETE FROM ndc_presupuesto WHERE id=?').run(req.params.id); logCambio(req,'eliminar_presupuesto','ndc_presupuesto',req.params.id,antes,null); res.json({ok:true}) })
 
 // ── Donantes ──────────────────────────────────────────────────────────────────
 app.get('/api/ndc/donantes', requireAuth, (req, res) => res.json(db.prepare('SELECT * FROM ndc_donantes ORDER BY nombre').all()))
@@ -595,5 +626,42 @@ if (fs.existsSync(path.join(publicDir, 'index.html'))) {
       res.sendFile(path.join(publicDir, 'index.html'))
   })
 }
+
+// ── Historial de cambios ──────────────────────────────────────────────────────
+app.get('/api/ndc/historial', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM ndc_historial ORDER BY created_at DESC LIMIT 300').all()
+  res.json(rows)
+})
+
+app.get('/api/ndc/historial/count', requireAdmin, (req, res) => {
+  const { n } = db.prepare("SELECT COUNT(*) as n FROM ndc_historial WHERE revertido=0").get()
+  res.json({ count: n })
+})
+
+app.post('/api/ndc/historial/:id/revertir', requireAdmin, (req, res) => {
+  const entry = db.prepare('SELECT * FROM ndc_historial WHERE id=?').get(req.params.id)
+  if (!entry) return res.status(404).json({ error: 'No encontrado' })
+  if (entry.revertido) return res.status(400).json({ error: 'Ya fue revertido' })
+  const ALLOWED = ['ndc_participantes','ndc_encuentros','ndc_hitos','ndc_presupuesto','ndc_escuelas','ndc_comunicacion','ndc_donantes']
+  if (!ALLOWED.includes(entry.tabla)) return res.status(400).json({ error: 'Tabla no permitida' })
+  const datosAntes = entry.datos_antes ? JSON.parse(entry.datos_antes) : null
+  try {
+    if (entry.accion.startsWith('crear_')) {
+      db.prepare(`DELETE FROM ${entry.tabla} WHERE id=?`).run(entry.registro_id)
+    } else if (entry.accion.startsWith('editar_') && datosAntes) {
+      const fields = Object.keys(datosAntes).filter(k => k !== 'id')
+      db.prepare(`UPDATE ${entry.tabla} SET ${fields.map(k=>`${k}=?`).join(',')} WHERE id=?`)
+        .run(...fields.map(k => datosAntes[k]), entry.registro_id)
+    } else if (entry.accion.startsWith('eliminar_') && datosAntes) {
+      const keys = Object.keys(datosAntes)
+      db.prepare(`INSERT OR REPLACE INTO ${entry.tabla} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`)
+        .run(...Object.values(datosAntes))
+    }
+    db.prepare('UPDATE ndc_historial SET revertido=1 WHERE id=?').run(entry.id)
+    res.json({ ok: true })
+  } catch(e) {
+    res.status(500).json({ error: 'No se pudo revertir: ' + e.message })
+  }
+})
 
 app.listen(PORT, () => console.log(`\n🌀 Nacer del Caos → http://localhost:${PORT}\n`))

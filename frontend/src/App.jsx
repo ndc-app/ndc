@@ -85,10 +85,40 @@ function LoginPage({ onLogin }) {
 }
 
 // ─── Panel admin: visibilidad ────────────────────────────────────────────────
+function tiempoAtras(iso) {
+  const diff = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 1000)
+  if (diff < 60) return 'ahora'
+  if (diff < 3600) return `hace ${Math.floor(diff/60)}m`
+  if (diff < 86400) return `hace ${Math.floor(diff/3600)}h`
+  return `hace ${Math.floor(diff/86400)}d`
+}
+
+const ACCION_LABEL = {
+  crear_participante: ['➕','Agregó a'], editar_participante: ['✏️','Modificó a'], eliminar_participante: ['🗑️','Eliminó a'],
+  crear_encuentro: ['➕','Registró encuentro'], eliminar_encuentro: ['🗑️','Eliminó encuentro'],
+  crear_hito: ['➕','Creó hito'], editar_hito: ['✏️','Editó hito'], eliminar_hito: ['🗑️','Eliminó hito'],
+  crear_escuela: ['➕','Agregó escuela'], editar_escuela: ['✏️','Editó escuela'], eliminar_escuela: ['🗑️','Eliminó escuela'],
+  crear_presupuesto: ['➕','Agregó movimiento'], eliminar_presupuesto: ['🗑️','Eliminó movimiento'],
+}
+
+function asuntoLabel(entry) {
+  const d = entry.datos_despues ? JSON.parse(entry.datos_despues) : null
+  const a = entry.datos_antes   ? JSON.parse(entry.datos_antes)   : null
+  const p = d || a
+  if (!p) return ''
+  if (entry.accion.includes('participante')) return `${p.apodo || ''} ${p.nombre || ''} ${p.apellido || ''}`.trim() || `ID ${entry.registro_id}`
+  if (entry.accion.includes('encuentro'))   return p.fecha ? p.fecha.slice(0,10) : `ID ${entry.registro_id}`
+  if (entry.accion.includes('hito'))        return p.titulo || `ID ${entry.registro_id}`
+  if (entry.accion.includes('escuela'))     return p.nombre || `ID ${entry.registro_id}`
+  if (entry.accion.includes('presupuesto')) return p.descripcion || `$${p.monto||''}`
+  return `ID ${entry.registro_id}`
+}
+
 function PanelAdmin({ onClose }) {
   const [visibilidad, setVisibilidad] = useState([])
   const [usuarios, setUsuarios] = useState([])
-  const [tabAdmin, setTabAdmin] = useState('visibilidad')
+  const [historial, setHistorial] = useState([])
+  const [tabAdmin, setTabAdmin] = useState('historial')
   const [formU, setFormU] = useState({ nombre:'', email:'', password:'', rol:'colaborador' })
   const [editU, setEditU] = useState(null)
   const [showFormU, setShowFormU] = useState(false)
@@ -103,7 +133,16 @@ function PanelAdmin({ onClose }) {
   useEffect(() => {
     authFetch('/api/visibilidad').then(r => r.json()).then(setVisibilidad).catch(()=>{})
     authFetch('/api/usuarios').then(r => r.json()).then(setUsuarios).catch(()=>{})
+    authFetch('/api/ndc/historial').then(r => r.json()).then(setHistorial).catch(()=>{})
   }, [])
+
+  async function revertir(id) {
+    if (!window.confirm('¿Revertir este cambio?')) return
+    const r = await authFetch(`/api/ndc/historial/${id}/revertir`, { method: 'POST' })
+    const data = await r.json()
+    if (data.ok) setHistorial(h => h.map(e => e.id === id ? { ...e, revertido: 1 } : e))
+    else alert('Error: ' + (data.error || 'desconocido'))
+  }
 
   async function toggleSeccion(seccion, bloqueada) {
     await authFetch(`/api/visibilidad/${seccion}`, {
@@ -156,7 +195,7 @@ function PanelAdmin({ onClose }) {
 
         {/* Sub-tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
-          {[['visibilidad','🔒 Secciones'],['usuarios','👥 Usuarios']].map(([id, label]) => (
+          {[['historial',`📋 Historial${historial.filter(e=>!e.revertido).length > 0 ? ` (${historial.filter(e=>!e.revertido).length})` : ''}`],['visibilidad','🔒 Secciones'],['usuarios','👥 Usuarios']].map(([id, label]) => (
             <button key={id} onClick={() => setTabAdmin(id)} style={{
               padding: '7px 16px', fontSize: 12, border: 'none',
               borderBottom: tabAdmin === id ? '2px solid #1a1a2e' : '2px solid transparent',
@@ -165,6 +204,37 @@ function PanelAdmin({ onClose }) {
             }}>{label}</button>
           ))}
         </div>
+
+        {tabAdmin === 'historial' && (
+          <div>
+            {historial.length === 0 && <div style={{ fontSize:12, color:'var(--text3)', textAlign:'center', padding:24 }}>Sin cambios registrados aún.</div>}
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {historial.map(entry => {
+                const [icono, verbo] = ACCION_LABEL[entry.accion] || ['•', entry.accion]
+                const asunto = asuntoLabel(entry)
+                const isElim = entry.accion.startsWith('eliminar_')
+                return (
+                  <div key={entry.id} style={{ background: entry.revertido ? 'var(--bg3)' : 'var(--bg2)', border:'1px solid var(--border)', borderRadius:8, padding:'8px 12px', opacity: entry.revertido ? 0.55 : 1 }}>
+                    <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+                      <div style={{ width:28, height:28, borderRadius:'50%', background: isElim ? '#3d0f0f' : entry.accion.startsWith('editar') ? '#1a2a4a' : '#0f3d1a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>{icono}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight:600 }}>{entry.usuario_nombre}</div>
+                        <div style={{ fontSize:11, color:'var(--text3)' }}>{verbo} <span style={{ color:'var(--text2)' }}>{asunto}</span></div>
+                      </div>
+                      <div style={{ fontSize:10, color:'var(--text3)', flexShrink:0, textAlign:'right' }}>
+                        <div>{tiempoAtras(entry.created_at)}</div>
+                        {entry.revertido
+                          ? <span style={{ fontSize:10, color:'#888', fontStyle:'italic' }}>revertido</span>
+                          : <button onClick={() => revertir(entry.id)} style={{ fontSize:10, padding:'2px 8px', borderRadius:4, border:'1px solid var(--border)', background:'transparent', color:'#c00', cursor:'pointer', marginTop:3 }}>Revertir</button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {tabAdmin === 'visibilidad' && (
           <div>
