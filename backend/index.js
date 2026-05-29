@@ -470,7 +470,7 @@ app.post('/api/ndc/participantes/:id/foto', requireAuth, uploadParticipante.sing
     if (isHeic) {
       imgBuffer = Buffer.from(await heicConvert({ buffer: imgBuffer, format: 'JPEG', quality: 0.9 }))
     }
-    await sharp(imgBuffer).resize(300, 300, { fit:'cover' }).jpeg({ quality:80 }).toFile(path.join(participantesDir, filename))
+    await sharp(imgBuffer).resize(480, 640, { fit:'inside', withoutEnlargement:true }).jpeg({ quality:82 }).toFile(path.join(participantesDir, filename))
     const prev = db.prepare('SELECT foto_url FROM ndc_participantes WHERE id=?').get(req.params.id)
     if (prev?.foto_url) { try { fs.unlinkSync(path.join(participantesDir, path.basename(prev.foto_url))) } catch(e) {} }
     db.prepare('UPDATE ndc_participantes SET foto_url=? WHERE id=?').run(`/uploads/participantes/${filename}`, req.params.id)

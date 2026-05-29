@@ -246,6 +246,101 @@ function EditorEncuadre({ src, posicion, aspecto = 16/9, onGuardar, onCerrar }) 
   )
 }
 
+// ─── Editor de recorte con zoom ──────────────────────────────────────────────
+function EditorCrop({ src, onGuardar, onCerrar }) {
+  const CROP_W = 264
+  const CROP_H = 352   // 3:4 portrait
+  const OUT_W  = 480
+  const OUT_H  = 640
+
+  const imgRef  = useRef()
+  const drag    = useRef({ on:false, lx:0, ly:0 })
+  const pinch   = useRef({ on:false, ld:0, lz:1 })
+  const [imgNat, setImgNat] = useState(null)
+  const [zoom, setZoom]     = useState(1)
+  const [panX, setPanX]     = useState(0)
+  const [panY, setPanY]     = useState(0)
+
+  const base = imgNat ? Math.max(CROP_W / imgNat.w, CROP_H / imgNat.h) : 1
+  const eff  = base * zoom
+  const dw   = imgNat ? imgNat.w * eff : CROP_W
+  const dh   = imgNat ? imgNat.h * eff : CROP_H
+  const mxX  = Math.max(0, (dw - CROP_W) / 2)
+  const mxY  = Math.max(0, (dh - CROP_H) / 2)
+  const cx   = Math.max(-mxX, Math.min(mxX, panX))
+  const cy   = Math.max(-mxY, Math.min(mxY, panY))
+
+  function bump(dx, dy) {
+    setPanX(x => Math.max(-mxX, Math.min(mxX, x + dx)))
+    setPanY(y => Math.max(-mxY, Math.min(mxY, y + dy)))
+  }
+
+  function mdown(e) { drag.current = { on:true, lx:e.clientX, ly:e.clientY } }
+  function mmove(e) {
+    if (!drag.current.on) return
+    bump(e.clientX - drag.current.lx, e.clientY - drag.current.ly)
+    drag.current.lx = e.clientX; drag.current.ly = e.clientY
+  }
+  function mup() { drag.current.on = false }
+
+  function tstart(e) {
+    if (e.touches.length === 1) {
+      drag.current = { on:true, lx:e.touches[0].clientX, ly:e.touches[0].clientY }
+    } else if (e.touches.length === 2) {
+      drag.current.on = false
+      pinch.current = { on:true, ld:Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY), lz:zoom }
+    }
+  }
+  function tmove(e) {
+    if (e.touches.length === 1 && drag.current.on) {
+      bump(e.touches[0].clientX - drag.current.lx, e.touches[0].clientY - drag.current.ly)
+      drag.current.lx = e.touches[0].clientX; drag.current.ly = e.touches[0].clientY
+    } else if (e.touches.length === 2 && pinch.current.on) {
+      const d = Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY)
+      setZoom(Math.max(1, Math.min(5, pinch.current.lz * d / pinch.current.ld)))
+    }
+  }
+  function tend() { drag.current.on = false; pinch.current.on = false }
+
+  function guardar() {
+    const img = imgRef.current
+    if (!img || !imgNat) return
+    const canvas = document.createElement('canvas')
+    canvas.width = OUT_W; canvas.height = OUT_H
+    const natCX = imgNat.w/2 - cx/eff, natCY = imgNat.h/2 - cy/eff
+    const natW  = CROP_W/eff, natH = CROP_H/eff
+    canvas.getContext('2d').drawImage(img, natCX-natW/2, natCY-natH/2, natW, natH, 0, 0, OUT_W, OUT_H)
+    canvas.toBlob(blob => blob ? onGuardar(blob) : alert('Error al recortar'), 'image/jpeg', 0.88)
+  }
+
+  const btn = { fontSize:22, background:'rgba(255,255,255,0.12)', border:'none', color:'#fff', borderRadius:8, width:44, height:44, cursor:'pointer', lineHeight:1 }
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:700, background:'rgba(0,0,0,0.96)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
+      <div style={{ color:'rgba(255,255,255,0.5)', fontSize:12 }}>Arrastrá para mover · Pellizco para acercar</div>
+      <div
+        style={{ position:'relative', width:CROP_W, height:CROP_H, overflow:'hidden', border:'2px solid rgba(255,255,255,0.8)', borderRadius:6, cursor:'grab', touchAction:'none', userSelect:'none' }}
+        onMouseDown={mdown} onMouseMove={mmove} onMouseUp={mup} onMouseLeave={mup}
+        onTouchStart={tstart} onTouchMove={tmove} onTouchEnd={tend}
+      >
+        <img ref={imgRef} src={src} draggable={false} alt=""
+          onLoad={() => { const i = imgRef.current; i && setImgNat({ w:i.naturalWidth, h:i.naturalHeight }) }}
+          style={{ position:'absolute', left:Math.round((CROP_W-dw)/2+cx), top:Math.round((CROP_H-dh)/2+cy), width:Math.round(dw), height:Math.round(dh), pointerEvents:'none', display:'block' }}
+        />
+      </div>
+      <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+        <button style={btn} onClick={() => setZoom(z => Math.max(1, z-0.2))}>−</button>
+        <span style={{ color:'rgba(255,255,255,0.5)', fontSize:12, width:44, textAlign:'center' }}>{Math.round(zoom*100)}%</span>
+        <button style={btn} onClick={() => setZoom(z => Math.min(5, z+0.2))}>+</button>
+      </div>
+      <div style={{ display:'flex', gap:10 }}>
+        <button onClick={guardar} style={{ padding:'9px 24px', borderRadius:8, border:'none', background:'#4f46e5', color:'#fff', cursor:'pointer', fontSize:14, fontWeight:600 }}>✓ Guardar encuadre</button>
+        <button onClick={onCerrar} style={{ padding:'9px 18px', borderRadius:8, border:'1px solid rgba(255,255,255,0.3)', background:'transparent', color:'#fff', cursor:'pointer', fontSize:14 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Foto carnet de participante ─────────────────────────────────────────────
 function FotoParticipante({ participante: p, onFotoChange }) {
   const [posicion, setPosicion] = useState(p.foto_posicion || '50% 50%')
@@ -253,22 +348,35 @@ function FotoParticipante({ participante: p, onFotoChange }) {
   const [visorFull, setVisorFull] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [cropSrc, setCropSrc] = useState(null)
   const fileRef = useRef()
 
   async function subirFoto(e) {
     const file = e.target.files[0]
     if (!file) return
+    e.target.value = ''
     setSubiendo(true)
     try {
       let foto = file
       try { foto = await convertirAJpeg(file) } catch(_) {}
+      setCropSrc(URL.createObjectURL(foto))
+    } catch(err) { alert('Error: ' + err.message) }
+    finally { setSubiendo(false) }
+  }
+
+  async function subirBlobCroppeado(blob) {
+    const oldSrc = cropSrc
+    setCropSrc(null)
+    URL.revokeObjectURL(oldSrc)
+    setSubiendo(true)
+    try {
       const fd = new FormData()
-      fd.append('foto', foto)
+      fd.append('foto', new File([blob], 'foto.jpg', { type:'image/jpeg' }))
       const r = await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto`, { method:'POST', body:fd }).then(r=>r.json())
       if (r.ok) onFotoChange(r.foto_url)
-      else alert('Error al guardar la foto: ' + (r.error || 'desconocido'))
+      else alert('Error al guardar: ' + (r.error || 'desconocido'))
     } catch(err) { alert('Error: ' + err.message) }
-    finally { setSubiendo(false); e.target.value = '' }
+    finally { setSubiendo(false) }
   }
 
   async function borrarFoto(e) {
@@ -323,6 +431,13 @@ function FotoParticipante({ participante: p, onFotoChange }) {
           aspecto={3/4}
           onGuardar={pos => { cambiarPosicion(pos); setEditandoEncuadre(false) }}
           onCerrar={() => setEditandoEncuadre(false)}
+        />
+      )}
+      {cropSrc && (
+        <EditorCrop
+          src={cropSrc}
+          onGuardar={subirBlobCroppeado}
+          onCerrar={() => { URL.revokeObjectURL(cropSrc); setCropSrc(null) }}
         />
       )}
     </>
