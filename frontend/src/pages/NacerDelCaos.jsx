@@ -363,6 +363,7 @@ function FotoParticipante({ participante: p, onFotoChange }) {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [cropSrc, setCropSrc]   = useState(null)
   const [cropBlob, setCropBlob] = useState(null)
+  const [reEditSrc, setReEditSrc] = useState(null)
   const fileRef = useRef()
 
   async function subirFoto(e) {
@@ -405,6 +406,19 @@ function FotoParticipante({ participante: p, onFotoChange }) {
     finally { setSubiendo(false) }
   }
 
+  async function subirBlobReEncuadrado(blob) {
+    setReEditSrc(null)
+    setSubiendo(true)
+    try {
+      const fd = new FormData()
+      fd.append('foto', new File([blob], 'foto.jpg', { type:'image/jpeg' }))
+      const r = await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto`, { method:'POST', body:fd }).then(r=>r.json())
+      if (r.ok) onFotoChange(r.foto_url)
+      else alert('Error al guardar: ' + (r.error || 'desconocido'))
+    } catch(err) { alert('Error: ' + err.message) }
+    finally { setSubiendo(false) }
+  }
+
   async function borrarFoto(e) {
     e.stopPropagation()
     if (!window.confirm('¿Eliminar la foto?')) return
@@ -436,7 +450,7 @@ function FotoParticipante({ participante: p, onFotoChange }) {
         {/* Botones siempre visibles */}
         <div style={{ display:'flex', gap:3 }}>
           {fotoSrc && <button onClick={() => setVisorFull(true)} title="Ver foto completa" style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1 }}>🔍</button>}
-          {fotoSrc && <button onClick={() => setEditandoEncuadre(true)} title="Ajustar encuadre" style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1 }}>📐</button>}
+          {fotoSrc && <button onClick={() => setReEditSrc(fotoSrc)} title="Reencuadrar foto" style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1 }}>📐</button>}
           <button onClick={() => fileRef.current.click()} title={fotoSrc ? 'Cambiar foto' : 'Agregar foto'} style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1 }}>{subiendo ? '⏳' : fotoSrc ? '🔄' : '📷'}</button>
           {fotoSrc && <button onClick={borrarFoto} title="Eliminar foto" style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1, color:'#991a1a' }}>✕</button>}
         </div>
@@ -450,21 +464,19 @@ function FotoParticipante({ participante: p, onFotoChange }) {
         </div>
       )}
 
-      {editandoEncuadre && fotoSrc && (
-        <EditorEncuadre
-          src={fotoSrc}
-          posicion={posicion}
-          aspecto={3/4}
-          onGuardar={pos => { cambiarPosicion(pos); setEditandoEncuadre(false) }}
-          onCerrar={() => setEditandoEncuadre(false)}
-        />
-      )}
       {cropSrc && (
         <EditorCrop
           src={cropSrc}
           fallback={cropBlob}
           onGuardar={subirBlobCroppeado}
           onCerrar={() => { URL.revokeObjectURL(cropSrc); setCropSrc(null); setCropBlob(null) }}
+        />
+      )}
+      {reEditSrc && (
+        <EditorCrop
+          src={reEditSrc}
+          onGuardar={subirBlobReEncuadrado}
+          onCerrar={() => setReEditSrc(null)}
         />
       )}
     </>
