@@ -105,8 +105,10 @@ db.prepare(`CREATE TABLE IF NOT EXISTS ndc_participantes (
   egresado INTEGER DEFAULT 0,
   foto_url TEXT,
   foto_posicion TEXT DEFAULT '50% 50%',
+  scholas_id INTEGER,
   created_at TEXT DEFAULT (datetime('now'))
 )`).run()
+try { db.prepare('ALTER TABLE ndc_participantes ADD COLUMN scholas_id INTEGER').run() } catch(e) {}
 
 // Encuentros
 db.prepare(`CREATE TABLE IF NOT EXISTS ndc_encuentros (
@@ -354,7 +356,7 @@ app.post('/api/sync/import', (req, res) => {
       if (!tabla.startsWith('ndc_')) continue
       try {
         db.prepare(`DELETE FROM ${tabla}`).run()
-        if (!filas?.length) return
+        if (!filas?.length) continue
         const cols = Object.keys(filas[0]).join(',')
         const placeholders = Object.keys(filas[0]).map(() => '?').join(',')
         const ins = db.prepare(`INSERT OR IGNORE INTO ${tabla} (${cols}) VALUES (${placeholders})`)
