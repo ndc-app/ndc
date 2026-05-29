@@ -1,0 +1,9 @@
+{
+  "name": "nacer-del-caos",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "start": "node backend/index.js",
+    "dev": "node backend/index.js"
+  }
+}
