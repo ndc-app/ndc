@@ -288,7 +288,7 @@ function FotoParticipante({ participante: p, onFotoChange }) {
 
   return (
     <>
-      <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{ display:'none' }} onChange={subirFoto} />
+      <input ref={fileRef} type="file" accept="image/*,image/heic,image/heif,.heic,.heif" style={{ display:'none' }} onChange={subirFoto} />
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, flexShrink:0 }}>
         {fotoSrc
           ? <div style={{ position:'relative', width:52, height:70, borderRadius:6, overflow:'hidden', cursor:'pointer' }} onClick={() => setMenuAbierto(m => !m)}>
