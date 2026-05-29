@@ -247,11 +247,7 @@ function EditorEncuadre({ src, posicion, aspecto = 16/9, onGuardar, onCerrar }) 
 }
 
 // ─── Editor de recorte con zoom ──────────────────────────────────────────────
-function EditorCrop({ src, onGuardar, onCerrar, fallback }) {
-  const CROP_W = 264
-  const CROP_H = 352   // 3:4 portrait
-  const OUT_W  = 480
-  const OUT_H  = 640
+function EditorCrop({ src, onGuardar, onCerrar, fallback, cropW: CROP_W = 264, cropH: CROP_H = 352, outW: OUT_W = 480, outH: OUT_H = 640 }) {
 
   const imgRef  = useRef()
   const drag    = useRef({ on:false, lx:0, ly:0 })
@@ -487,27 +483,62 @@ function FotoParticipante({ participante: p, onFotoChange }) {
 function TarjetaHito({ hito: h, onDelete, onEdit, onImagenChange }) {
   const [visor, setVisor] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
-  const [posicion, setPosicion] = useState(h.imagen_posicion || 'center center')
-  const [editandoEncuadre, setEditandoEncuadre] = useState(false)
+  const [cropSrc, setCropSrc]   = useState(null)
+  const [cropBlob, setCropBlob] = useState(null)
+  const [reEditSrc, setReEditSrc] = useState(null)
   const fileRef = useRef()
 
-  async function cambiarPosicion(pos) {
-    setPosicion(pos)
-    await authFetch(`${BASE}/api/ndc/hitos/${h.id}/posicion`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ posicion: pos }) })
-  }
+  const HITO_CW = 320, HITO_CH = 180, HITO_OW = 960, HITO_OH = 540  // 16:9
 
   async function subirImagen(e) {
     const file = e.target.files[0]
     if (!file) return
+    e.target.value = ''
+    setSubiendo(true)
+    try {
+      let foto = file
+      let converted = false
+      try { foto = await convertirAJpeg(file); converted = true } catch(_) {}
+      if (!converted) {
+        const fd = new FormData()
+        fd.append('imagen', foto)
+        const r = await authFetch(`${BASE}/api/ndc/hitos/${h.id}/imagen`, { method:'POST', body:fd }).then(r=>r.json())
+        if (r.ok) onImagenChange(r.imagen_url)
+        else alert('Error al subir: ' + (r.error || 'desconocido'))
+      } else {
+        setCropBlob(foto)
+        setCropSrc(URL.createObjectURL(foto))
+      }
+    } catch(err) { alert('Error: ' + err.message) }
+    finally { setSubiendo(false) }
+  }
+
+  async function subirBlobCroppeado(blob) {
+    const oldSrc = cropSrc
+    setCropSrc(null); setCropBlob(null)
+    URL.revokeObjectURL(oldSrc)
     setSubiendo(true)
     try {
       const fd = new FormData()
-      fd.append('imagen', file)
+      fd.append('imagen', new File([blob], 'imagen.jpg', { type:'image/jpeg' }))
       const r = await authFetch(`${BASE}/api/ndc/hitos/${h.id}/imagen`, { method:'POST', body:fd }).then(r=>r.json())
       if (r.ok) onImagenChange(r.imagen_url)
-      else alert('Error al subir: ' + (r.error || 'desconocido'))
-    } catch(err) { alert('Error al subir la imagen: ' + err.message) }
-    finally { setSubiendo(false); e.target.value = '' }
+      else alert('Error al guardar: ' + (r.error || 'desconocido'))
+    } catch(err) { alert('Error: ' + err.message) }
+    finally { setSubiendo(false) }
+  }
+
+  async function subirBlobReEncuadrado(blob) {
+    setReEditSrc(null)
+    setSubiendo(true)
+    try {
+      const fd = new FormData()
+      fd.append('imagen', new File([blob], 'imagen.jpg', { type:'image/jpeg' }))
+      const r = await authFetch(`${BASE}/api/ndc/hitos/${h.id}/imagen`, { method:'POST', body:fd }).then(r=>r.json())
+      if (r.ok) onImagenChange(r.imagen_url)
+      else alert('Error al guardar: ' + (r.error || 'desconocido'))
+    } catch(err) { alert('Error: ' + err.message) }
+    finally { setSubiendo(false) }
   }
 
   async function borrarImagen(e) {
@@ -531,7 +562,7 @@ function TarjetaHito({ hito: h, onDelete, onEdit, onImagenChange }) {
                 onMouseEnter={e => e.target.style.transform='scale(1.03)'}
                 onMouseLeave={e => e.target.style.transform='scale(1)'} />
               <div style={{ position:'absolute', bottom:6, right:6, display:'flex', gap:4 }} onClick={e=>e.stopPropagation()}>
-                <button onClick={()=>setEditandoEncuadre(true)} style={{ fontSize:11, padding:'3px 8px', borderRadius:6, border:'none', background:'rgba(0,0,0,0.55)', color:'#fff', cursor:'pointer' }}>⊹ encuadre</button>
+                <button onClick={()=>setReEditSrc(`${BASE}/uploads/hitos/${h.imagen_url}`)} style={{ fontSize:11, padding:'3px 8px', borderRadius:6, border:'none', background:'rgba(0,0,0,0.55)', color:'#fff', cursor:'pointer' }}>⊹ encuadre</button>
                 <button onClick={() => fileRef.current.click()} disabled={subiendo} style={{ fontSize:11, padding:'3px 8px', borderRadius:6, border:'none', background:'rgba(0,0,0,0.55)', color:'#fff', cursor:'pointer' }}>{subiendo ? '⏳' : '↑ cambiar'}</button>
                 <button onClick={borrarImagen} style={{ fontSize:11, padding:'3px 7px', borderRadius:6, border:'none', background:'rgba(180,0,0,0.7)', color:'#fff', cursor:'pointer' }}>✕</button>
               </div>
@@ -560,13 +591,18 @@ function TarjetaHito({ hito: h, onDelete, onEdit, onImagenChange }) {
         </div>
       </div>
 
-      {/* Editor de encuadre */}
-      {editandoEncuadre && (
-        <EditorEncuadre
-          src={`${BASE}/uploads/hitos/${h.imagen_url}`}
-          posicion={posicion}
-          onGuardar={pos => { cambiarPosicion(pos); setEditandoEncuadre(false) }}
-          onCerrar={() => setEditandoEncuadre(false)}
+      {cropSrc && (
+        <EditorCrop src={cropSrc} fallback={cropBlob}
+          cropW={HITO_CW} cropH={HITO_CH} outW={HITO_OW} outH={HITO_OH}
+          onGuardar={subirBlobCroppeado}
+          onCerrar={() => { URL.revokeObjectURL(cropSrc); setCropSrc(null); setCropBlob(null) }}
+        />
+      )}
+      {reEditSrc && (
+        <EditorCrop src={reEditSrc}
+          cropW={HITO_CW} cropH={HITO_CH} outW={HITO_OW} outH={HITO_OH}
+          onGuardar={subirBlobReEncuadrado}
+          onCerrar={() => setReEditSrc(null)}
         />
       )}
 

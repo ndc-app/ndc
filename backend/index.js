@@ -27,7 +27,8 @@ app.use(express.json({ limit: '20mb' }))
 const uploadsDir = path.join(__dirname, 'uploads')
 const materialesDir = path.join(uploadsDir, 'materiales')
 const participantesDir = path.join(uploadsDir, 'participantes')
-;[uploadsDir, materialesDir, participantesDir].forEach(d => {
+const hitosDir = path.join(uploadsDir, 'hitos')
+;[uploadsDir, materialesDir, participantesDir, hitosDir].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true })
 })
 app.use('/uploads', express.static(uploadsDir))
@@ -546,6 +547,32 @@ app.post('/api/ndc/hitos', requireAuth, (req, res) => { const b = req.body; cons
 app.put('/api/ndc/hitos/:id', requireAuth, (req, res) => { const b = req.body; const antes = db.prepare('SELECT * FROM ndc_hitos WHERE id=?').get(req.params.id); db.prepare('UPDATE ndc_hitos SET tipo=?,titulo=?,fecha=?,lugar=?,descripcion=? WHERE id=?').run(b.tipo,b.titulo,b.fecha,b.lugar,b.descripcion,req.params.id); logCambio(req,'editar_hito','ndc_hitos',req.params.id,antes,b); res.json({ok:true}) })
 app.delete('/api/ndc/hitos/:id', requireAuth, (req, res) => { const antes = db.prepare('SELECT * FROM ndc_hitos WHERE id=?').get(req.params.id); db.prepare('DELETE FROM ndc_hitos WHERE id=?').run(req.params.id); logCambio(req,'eliminar_hito','ndc_hitos',req.params.id,antes,null); res.json({ok:true}) })
 app.patch('/api/ndc/hitos/:id/posicion', requireAuth, (req, res) => { db.prepare('UPDATE ndc_hitos SET imagen_posicion=? WHERE id=?').run(req.body.posicion||'50% 50%', req.params.id); res.json({ok:true}) })
+
+const uploadHito = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } })
+app.post('/api/ndc/hitos/:id/imagen', requireAuth, uploadHito.single('imagen'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Sin archivo' })
+    const filename = `h_${req.params.id}_${Date.now()}.jpg`
+    let imgBuffer = req.file.buffer
+    const isHeic = req.file.mimetype === 'image/heic' || req.file.mimetype === 'image/heif' ||
+                   /\.(heic|heif)$/i.test(req.file.originalname || '')
+    if (isHeic) {
+      imgBuffer = Buffer.from(await heicConvert({ buffer: imgBuffer, format: 'JPEG', quality: 0.9 }))
+    }
+    await sharp(imgBuffer).resize(1280, 720, { fit:'inside', withoutEnlargement:true }).jpeg({ quality:85 }).toFile(path.join(hitosDir, filename))
+    const prev = db.prepare('SELECT imagen_url FROM ndc_hitos WHERE id=?').get(req.params.id)
+    if (prev?.imagen_url) { try { fs.unlinkSync(path.join(hitosDir, prev.imagen_url)) } catch(e) {} }
+    db.prepare('UPDATE ndc_hitos SET imagen_url=? WHERE id=?').run(filename, req.params.id)
+    res.json({ ok:true, imagen_url: filename })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/ndc/hitos/:id/imagen', requireAuth, (req, res) => {
+  const h = db.prepare('SELECT imagen_url FROM ndc_hitos WHERE id=?').get(req.params.id)
+  if (h?.imagen_url) { try { fs.unlinkSync(path.join(hitosDir, h.imagen_url)) } catch(e) {} }
+  db.prepare('UPDATE ndc_hitos SET imagen_url=NULL WHERE id=?').run(req.params.id)
+  res.json({ ok:true })
+})
 
 // ── Presupuesto ───────────────────────────────────────────────────────────────
 app.get('/api/ndc/presupuesto', requireAuth, (req, res) => res.json(req.query.camada_id ? db.prepare('SELECT * FROM ndc_presupuesto WHERE camada_id=? ORDER BY fecha DESC').all(req.query.camada_id) : db.prepare('SELECT * FROM ndc_presupuesto ORDER BY fecha DESC').all()))
