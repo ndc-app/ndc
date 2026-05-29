@@ -94,8 +94,28 @@ function fmt(n) { return Math.round(n||0).toLocaleString('es-AR') }
 
 // ─── Cuadro dinámico ─────────────────────────────────────────────────────────
 function CuadroDinamico({ stats }) {
-  const [frase] = useState(() => FRASES[Math.floor(Math.random() * FRASES.length)])
+  const [favoritas, setFavoritas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ndc_frases_fav') || '[]') } catch { return [] }
+  })
+  const [frase, setFrase] = useState(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem('ndc_frases_fav') || '[]')
+      if (favs.length > 0 && Math.random() < 0.5) return FRASES.find(f => f.texto === favs[Math.floor(Math.random() * favs.length)]) || FRASES[Math.floor(Math.random() * FRASES.length)]
+    } catch {}
+    return FRASES[Math.floor(Math.random() * FRASES.length)]
+  })
+
   const iconos = { pintor:'🎨', psicólogo:'🧠', filósofo:'💭', escritor:'📖', escritora:'📖', pensador:'✨', pensadora:'✨', tarot:'🔮', sabiduría:'🌿' }
+  const esFavorita = favoritas.includes(frase.texto)
+
+  function toggleFavorita() {
+    const nuevas = esFavorita
+      ? favoritas.filter(t => t !== frase.texto)
+      : [...favoritas, frase.texto]
+    setFavoritas(nuevas)
+    localStorage.setItem('ndc_frases_fav', JSON.stringify(nuevas))
+  }
+
   return (
     <div style={{ background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', borderRadius:16, padding:'28px 32px', marginBottom:20, position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:0, left:0, right:0, bottom:0, opacity:0.03, backgroundImage:'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize:'60px 60px' }} />
@@ -121,8 +141,13 @@ function CuadroDinamico({ stats }) {
           <div style={{ fontSize:15, color:'rgba(255,255,255,0.9)', lineHeight:1.6, fontStyle:'italic', marginBottom:8 }}>
             "{frase.texto}"
           </div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>
-            {iconos[frase.fuente] || '✨'} {frase.autor}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>
+              {iconos[frase.fuente] || '✨'} {frase.autor}
+            </div>
+            <button onClick={toggleFavorita} title={esFavorita ? 'Quitar de favoritas' : 'Marcar como favorita'} style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, lineHeight:1, padding:'2px 4px', opacity: esFavorita ? 1 : 0.35, transition:'opacity .2s, transform .15s', transform: esFavorita ? 'scale(1.2)' : 'scale(1)' }}>
+              ⭐
+            </button>
           </div>
         </div>
       </div>
