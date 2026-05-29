@@ -248,8 +248,9 @@ function EditorEncuadre({ src, posicion, aspecto = 16/9, onGuardar, onCerrar }) 
 function FotoParticipante({ participante: p, onFotoChange }) {
   const [posicion, setPosicion] = useState(p.foto_posicion || '50% 50%')
   const [editandoEncuadre, setEditandoEncuadre] = useState(false)
+  const [visorFull, setVisorFull] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
-  const [hover, setHover] = useState(false)
+  const [menuAbierto, setMenuAbierto] = useState(false)
   const fileRef = useRef()
 
   async function subirFoto(e) {
@@ -271,6 +272,7 @@ function FotoParticipante({ participante: p, onFotoChange }) {
     if (!window.confirm('¿Eliminar la foto?')) return
     await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto`, { method:'DELETE' })
     onFotoChange(null)
+    setMenuAbierto(false)
   }
 
   async function cambiarPosicion(pos) {
@@ -278,30 +280,41 @@ function FotoParticipante({ participante: p, onFotoChange }) {
     await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto-posicion`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ posicion: pos }) })
   }
 
+  const fotoSrc = p.foto_url ? `${BASE}/uploads/participantes/${p.foto_url}` : null
+
   return (
     <>
       <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{ display:'none' }} onChange={subirFoto} />
-      {p.foto_url
-        ? <div style={{ position:'relative', width:52, height:70, borderRadius:6, overflow:'hidden', flexShrink:0, cursor:'pointer' }}
-            onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
-            <img src={`${BASE}/uploads/participantes/${p.foto_url}`} alt=""
-              style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: posicion, display:'block' }} />
-            {hover && (
-              <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.55)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3 }}>
-                <button onClick={()=>setEditandoEncuadre(true)} style={{ fontSize:9, padding:'2px 6px', borderRadius:4, border:'none', background:'rgba(255,255,255,0.2)', color:'#fff', cursor:'pointer' }}>encuadre</button>
-                <button onClick={()=>fileRef.current.click()} style={{ fontSize:9, padding:'2px 6px', borderRadius:4, border:'none', background:'rgba(255,255,255,0.2)', color:'#fff', cursor:'pointer' }}>cambiar</button>
-                <button onClick={borrarFoto} style={{ fontSize:9, padding:'2px 5px', borderRadius:4, border:'none', background:'rgba(180,0,0,0.75)', color:'#fff', cursor:'pointer' }}>✕</button>
-              </div>
-            )}
-          </div>
-        : <div onClick={()=>!subiendo && fileRef.current.click()}
-            style={{ width:52, height:70, borderRadius:6, border:'1.5px dashed var(--border2)', background:'var(--bg3)', display:'flex', alignItems:'center', justifyContent:'center', cursor: subiendo ? 'wait' : 'pointer', flexShrink:0 }}>
-            <span style={{ fontSize:20 }}>{subiendo ? '⏳' : '📷'}</span>
-          </div>
-      }
-      {editandoEncuadre && (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, flexShrink:0 }}>
+        {fotoSrc
+          ? <div style={{ position:'relative', width:52, height:70, borderRadius:6, overflow:'hidden', cursor:'pointer' }} onClick={() => setMenuAbierto(m => !m)}>
+              <img src={fotoSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: posicion, display:'block' }} />
+            </div>
+          : <div onClick={() => !subiendo && fileRef.current.click()}
+              style={{ width:52, height:70, borderRadius:6, border:'1.5px dashed var(--border2)', background:'var(--bg3)', display:'flex', alignItems:'center', justifyContent:'center', cursor: subiendo ? 'wait' : 'pointer' }}>
+              <span style={{ fontSize:20 }}>{subiendo ? '⏳' : '📷'}</span>
+            </div>
+        }
+        {/* Botones siempre visibles */}
+        <div style={{ display:'flex', gap:3 }}>
+          {fotoSrc && <button onClick={() => setVisorFull(true)} title="Ver foto completa" style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1 }}>🔍</button>}
+          {fotoSrc && <button onClick={() => setEditandoEncuadre(true)} title="Ajustar encuadre" style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1 }}>📐</button>}
+          <button onClick={() => fileRef.current.click()} title={fotoSrc ? 'Cambiar foto' : 'Agregar foto'} style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1 }}>{subiendo ? '⏳' : fotoSrc ? '🔄' : '📷'}</button>
+          {fotoSrc && <button onClick={borrarFoto} title="Eliminar foto" style={{ fontSize:13, background:'none', border:'none', cursor:'pointer', padding:1, lineHeight:1, color:'#991a1a' }}>✕</button>}
+        </div>
+      </div>
+
+      {/* Visor fullscreen */}
+      {visorFull && fotoSrc && (
+        <div onClick={() => setVisorFull(false)} style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(0,0,0,0.92)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'zoom-out', flexDirection:'column', gap:10 }}>
+          <img src={fotoSrc} alt="" style={{ maxWidth:'92vw', maxHeight:'88vh', objectFit:'contain', borderRadius:8 }} />
+          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:12 }}>tap para cerrar</div>
+        </div>
+      )}
+
+      {editandoEncuadre && fotoSrc && (
         <EditorEncuadre
-          src={`${BASE}/uploads/participantes/${p.foto_url}`}
+          src={fotoSrc}
           posicion={posicion}
           aspecto={3/4}
           onGuardar={pos => { cambiarPosicion(pos); setEditandoEncuadre(false) }}
@@ -592,6 +605,11 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
   const [formPres, setFormPres] = useState({ categoria:'materiales', descripcion:'', monto:'', tipo:'gasto', fecha: new Date().toISOString().slice(0,10) })
   const [formEs, setFormEs] = useState({ nombre:'', direccion:'', localidad:'', referente_nombre:'', referente_tel:'', referente_email:'', notas:'' })
   const [editEscuela, setEditEscuela] = useState(null)
+  const [draggingId, setDraggingId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
+  const dragRef = useRef({ active: false, pid: null })
+  const dragOverRef = useRef(null)
+  const cardRefsP = useRef({})
 
   useEffect(() => { api.get('/api/ndc/camadas').then(setCamadas) }, [])
   useEffect(() => {
@@ -883,9 +901,12 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
                 </div>
               )}
 
-              {/* Lista de participantes: egresados primero */}
+              {/* Lista de participantes */}
               <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                {[...participantes].sort((a,b) => (b.egresado||0)-(a.egresado||0) || (a.apellido||'').localeCompare(b.apellido||'')).filter(p => {
+                {(busquedaP
+                  ? [...participantes].sort((a,b) => (a.apellido||'').localeCompare(b.apellido||''))
+                  : participantes
+                ).filter(p => {
                   if (!busquedaP) return true
                   const q = busquedaP.toLowerCase()
                   return (p.apodo||'').toLowerCase().includes(q) || (p.nombre||'').toLowerCase().includes(q) || (p.apellido||'').toLowerCase().includes(q)
@@ -893,7 +914,59 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
                   const isEditing = editParticipante?.id === p.id
                   return (
                   <React.Fragment key={p.id}>
-                    <div style={{ background:'var(--bg2)', border:`1px solid ${isEditing?'var(--border2)':p.egresado?'#3B6D11':'var(--border)'}`, borderRadius: isEditing ? '8px 8px 0 0' : 8, padding:'10px 14px', display:'flex', gap:12, alignItems:'flex-start' }}>
+                    <div
+                      ref={el => { cardRefsP.current[p.id] = el }}
+                      style={{ background:'var(--bg2)', border:`1px solid ${isEditing?'var(--border2)':dragOverId===p.id&&!busquedaP?'#4285f4':p.egresado?'#3B6D11':'var(--border)'}`, borderRadius: isEditing ? '8px 8px 0 0' : 8, padding:'10px 14px', display:'flex', gap:8, alignItems:'flex-start', opacity: draggingId===p.id ? 0.4 : 1, transition:'opacity 0.12s' }}>
+                      {!busquedaP && (
+                        <span
+                          title="Arrastrar para reordenar"
+                          style={{ fontSize:18, color:'var(--text3)', cursor:'grab', alignSelf:'center', userSelect:'none', touchAction:'none', flexShrink:0, lineHeight:1 }}
+                          onPointerDown={e => {
+                            e.preventDefault()
+                            e.currentTarget.setPointerCapture(e.pointerId)
+                            dragRef.current = { active: true, pid: p.id }
+                            dragOverRef.current = null
+                            setDraggingId(p.id)
+                          }}
+                          onPointerMove={e => {
+                            if (!dragRef.current.active || dragRef.current.pid !== p.id) return
+                            const y = e.clientY
+                            let found = null
+                            for (const [cid, el] of Object.entries(cardRefsP.current)) {
+                              if (!el) continue
+                              const r = el.getBoundingClientRect()
+                              if (y >= r.top && y <= r.bottom) { found = parseInt(cid); break }
+                            }
+                            if (found !== null) { dragOverRef.current = found; setDragOverId(found) }
+                          }}
+                          onPointerUp={() => {
+                            if (!dragRef.current.active || dragRef.current.pid !== p.id) return
+                            dragRef.current.active = false
+                            const targetId = dragOverRef.current
+                            if (targetId && targetId !== p.id) {
+                              setParticipantes(prev => {
+                                const ps = [...prev]
+                                const fi = ps.findIndex(x => x.id === p.id)
+                                const ti = ps.findIndex(x => x.id === targetId)
+                                if (fi !== -1 && ti !== -1 && fi !== ti) {
+                                  const [moved] = ps.splice(fi, 1)
+                                  ps.splice(ti, 0, moved)
+                                  api.post('/api/ndc/participantes/reorder', { ids: ps.map(x => x.id) })
+                                  return ps
+                                }
+                                return prev
+                              })
+                            }
+                            setDraggingId(null)
+                            setDragOverId(null)
+                            dragOverRef.current = null
+                          }}
+                          onPointerCancel={() => {
+                            dragRef.current.active = false
+                            setDraggingId(null); setDragOverId(null); dragOverRef.current = null
+                          }}
+                        >⠿</span>
+                      )}
                       <FotoParticipante participante={p} onFotoChange={foto_url => setParticipantes(ps => ps.map(x => x.id === p.id ? {...x, foto_url} : x))} />
                       {/* Izquierda: info del participante */}
                       <div style={{ flex:1, display:'flex', flexDirection:'column', gap:3 }}>
@@ -934,9 +1007,9 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
                       </div>
                       {/* Derecha: responsable */}
                       {(p.padre_madre || p.responsable || p.contacto_responsable || p.tutor_mail) && (
-                        <div style={{ borderLeft:'1px solid var(--border)', paddingLeft:10, minWidth:140, maxWidth:200 }}>
+                        <div style={{ borderLeft:'1px solid var(--border)', paddingLeft:10, maxWidth:180, minWidth:0, flexShrink:1 }}>
                           <div style={{ fontSize:10, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4, textAlign:'right' }}>Responsable</div>
-                          <div style={{ fontSize:11, color:'var(--text2)', display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end' }}>
+                          <div style={{ fontSize:11, color:'var(--text2)', display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end', wordBreak:'break-word', overflowWrap:'anywhere' }}>
                             {(p.padre_madre || p.responsable) && <span>👤 {p.padre_madre || p.responsable}</span>}
                             {p.contacto_responsable && <span>📞 {p.contacto_responsable}</span>}
                             {p.tutor_mail && <span>✉️ {p.tutor_mail}</span>}

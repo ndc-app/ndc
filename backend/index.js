@@ -111,6 +111,7 @@ db.prepare(`CREATE TABLE IF NOT EXISTS ndc_participantes (
   created_at TEXT DEFAULT (datetime('now'))
 )`).run()
 try { db.prepare('ALTER TABLE ndc_participantes ADD COLUMN scholas_id INTEGER').run() } catch(e) {}
+try { db.prepare('ALTER TABLE ndc_participantes ADD COLUMN orden INTEGER DEFAULT 0').run() } catch(e) {}
 
 // Encuentros
 db.prepare(`CREATE TABLE IF NOT EXISTS ndc_encuentros (
@@ -435,8 +436,8 @@ app.get('/api/ndc/participantes', requireAuth, (req, res) => {
     `).all(t, t, t, t))
   }
   const q = req.query.camada_id
-    ? db.prepare('SELECT * FROM ndc_participantes WHERE camada_id=? ORDER BY apellido,nombre,apodo').all(req.query.camada_id)
-    : db.prepare('SELECT * FROM ndc_participantes ORDER BY apellido,nombre,apodo').all()
+    ? db.prepare('SELECT * FROM ndc_participantes WHERE camada_id=? ORDER BY orden, apellido, nombre, apodo').all(req.query.camada_id)
+    : db.prepare('SELECT * FROM ndc_participantes ORDER BY apellido, nombre, apodo').all()
   res.json(q)
 })
 
@@ -480,6 +481,14 @@ app.delete('/api/ndc/participantes/:id/foto', requireAuth, (req, res) => {
   if (p?.foto_url) { try { fs.unlinkSync(path.join(participantesDir, path.basename(p.foto_url))) } catch(e) {} }
   db.prepare('UPDATE ndc_participantes SET foto_url=NULL WHERE id=?').run(req.params.id)
   res.json({ ok:true })
+})
+
+app.post('/api/ndc/participantes/reorder', requireAuth, (req, res) => {
+  const { ids } = req.body
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids requerido' })
+  const stmt = db.prepare('UPDATE ndc_participantes SET orden=? WHERE id=?')
+  db.transaction(() => ids.forEach((id, idx) => stmt.run(idx, id)))()
+  res.json({ ok: true })
 })
 
 // ── Escuelas ──────────────────────────────────────────────────────────────────
