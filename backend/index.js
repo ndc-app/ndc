@@ -13,7 +13,9 @@ const PORT = process.env.PORT || 3010
 const JWT_SECRET = process.env.JWT_SECRET || 'ndc-secret-cambiar-en-prod'
 const SYNC_KEY   = process.env.SYNC_KEY   || 'sync-key-cambiar-en-prod'
 
-const dbPath = path.join(__dirname, 'ndc.db')
+const dataDir = process.env.DATA_DIR || __dirname
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
+const dbPath = path.join(dataDir, 'ndc.db')
 const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
 
