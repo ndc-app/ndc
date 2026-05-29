@@ -358,8 +358,19 @@ function FotoParticipante({ participante: p, onFotoChange }) {
     setSubiendo(true)
     try {
       let foto = file
-      try { foto = await convertirAJpeg(file) } catch(_) {}
-      setCropSrc(URL.createObjectURL(foto))
+      let converted = false
+      try { foto = await convertirAJpeg(file); converted = true } catch(_) {}
+
+      if (!converted) {
+        // Browser can't decode this format (e.g. HEIC on Chrome) — upload directly, backend converts
+        const fd = new FormData()
+        fd.append('foto', foto)
+        const r = await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto`, { method:'POST', body:fd }).then(r=>r.json())
+        if (r.ok) onFotoChange(r.foto_url)
+        else alert('Error al guardar: ' + (r.error || 'desconocido'))
+      } else {
+        setCropSrc(URL.createObjectURL(foto))
+      }
     } catch(err) { alert('Error: ' + err.message) }
     finally { setSubiendo(false) }
   }
