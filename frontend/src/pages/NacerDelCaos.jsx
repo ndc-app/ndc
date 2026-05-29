@@ -1,23 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import React from 'react'
 
-async function heicAJpeg(file) {
+async function convertirAJpeg(file, maxPx = 1400) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
     img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight))
+      const w = Math.round(img.naturalWidth * scale)
+      const h = Math.round(img.naturalHeight * scale)
       const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth
-      canvas.height = img.naturalHeight
-      canvas.getContext('2d').drawImage(img, 0, 0)
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
       canvas.toBlob(blob => {
-        URL.revokeObjectURL(url)
         blob
-          ? resolve(new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' }))
-          : reject(new Error('Canvas no pudo convertir la imagen'))
-      }, 'image/jpeg', 0.9)
+          ? resolve(new File([blob], 'foto.jpg', { type: 'image/jpeg' }))
+          : reject(new Error('canvas toBlob falló'))
+      }, 'image/jpeg', 0.85)
     }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo cargar la imagen HEIC')) }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo cargar la imagen')) }
     img.src = url
   })
 }
@@ -258,8 +260,10 @@ function FotoParticipante({ participante: p, onFotoChange }) {
     if (!file) return
     setSubiendo(true)
     try {
+      let foto = file
+      try { foto = await convertirAJpeg(file) } catch(_) {}
       const fd = new FormData()
-      fd.append('foto', file)
+      fd.append('foto', foto)
       const r = await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto`, { method:'POST', body:fd }).then(r=>r.json())
       if (r.ok) onFotoChange(r.foto_url)
       else alert('Error: ' + (r.error || 'desconocido'))
@@ -280,7 +284,7 @@ function FotoParticipante({ participante: p, onFotoChange }) {
     await authFetch(`${BASE}/api/ndc/participantes/${p.id}/foto-posicion`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ posicion: pos }) })
   }
 
-  const fotoSrc = p.foto_url ? `${BASE}/uploads/participantes/${p.foto_url}` : null
+  const fotoSrc = p.foto_url ? `${BASE}${p.foto_url}` : null
 
   return (
     <>
