@@ -247,7 +247,7 @@ function EditorEncuadre({ src, posicion, aspecto = 16/9, onGuardar, onCerrar }) 
 }
 
 // ─── Editor de recorte con zoom ──────────────────────────────────────────────
-function EditorCrop({ src, onGuardar, onCerrar }) {
+function EditorCrop({ src, onGuardar, onCerrar, fallback }) {
   const CROP_W = 264
   const CROP_H = 352   // 3:4 portrait
   const OUT_W  = 480
@@ -256,10 +256,11 @@ function EditorCrop({ src, onGuardar, onCerrar }) {
   const imgRef  = useRef()
   const drag    = useRef({ on:false, lx:0, ly:0 })
   const pinch   = useRef({ on:false, ld:0, lz:1 })
-  const [imgNat, setImgNat] = useState(null)
-  const [zoom, setZoom]     = useState(1)
-  const [panX, setPanX]     = useState(0)
-  const [panY, setPanY]     = useState(0)
+  const [imgNat, setImgNat]   = useState(null)
+  const [imgError, setImgError] = useState(false)
+  const [zoom, setZoom]       = useState(1)
+  const [panX, setPanX]       = useState(0)
+  const [panY, setPanY]       = useState(0)
 
   const base = imgNat ? Math.max(CROP_W / imgNat.w, CROP_H / imgNat.h) : 1
   const eff  = base * zoom
@@ -325,16 +326,28 @@ function EditorCrop({ src, onGuardar, onCerrar }) {
       >
         <img ref={imgRef} src={src} draggable={false} alt=""
           onLoad={() => { const i = imgRef.current; i && setImgNat({ w:i.naturalWidth, h:i.naturalHeight }) }}
-          style={{ position:'absolute', left:Math.round((CROP_W-dw)/2+cx), top:Math.round((CROP_H-dh)/2+cy), width:Math.round(dw), height:Math.round(dh), pointerEvents:'none', display:'block' }}
+          onError={() => setImgError(true)}
+          style={{ position:'absolute', left:Math.round((CROP_W-dw)/2+cx), top:Math.round((CROP_H-dh)/2+cy), width:Math.round(dw), height:Math.round(dh), pointerEvents:'none', display: imgError ? 'none' : 'block' }}
         />
+        {imgError && (
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, color:'rgba(255,255,255,0.5)', fontSize:12, textAlign:'center', padding:16 }}>
+            <span style={{ fontSize:32 }}>🖼️</span>
+            <span>No se puede previsualizar<br/>este formato</span>
+          </div>
+        )}
       </div>
-      <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-        <button style={btn} onClick={() => setZoom(z => Math.max(1, z-0.2))}>−</button>
-        <span style={{ color:'rgba(255,255,255,0.5)', fontSize:12, width:44, textAlign:'center' }}>{Math.round(zoom*100)}%</span>
-        <button style={btn} onClick={() => setZoom(z => Math.min(5, z+0.2))}>+</button>
-      </div>
+      {!imgError && (
+        <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+          <button style={btn} onClick={() => setZoom(z => Math.max(1, z-0.2))}>−</button>
+          <span style={{ color:'rgba(255,255,255,0.5)', fontSize:12, width:44, textAlign:'center' }}>{Math.round(zoom*100)}%</span>
+          <button style={btn} onClick={() => setZoom(z => Math.min(5, z+0.2))}>+</button>
+        </div>
+      )}
       <div style={{ display:'flex', gap:10 }}>
-        <button onClick={guardar} style={{ padding:'9px 24px', borderRadius:8, border:'none', background:'#4f46e5', color:'#fff', cursor:'pointer', fontSize:14, fontWeight:600 }}>✓ Guardar encuadre</button>
+        {imgError
+          ? <button onClick={() => fallback && onGuardar(fallback)} style={{ padding:'9px 24px', borderRadius:8, border:'none', background:'#4f46e5', color:'#fff', cursor:'pointer', fontSize:14, fontWeight:600 }}>⬆ Subir sin recortar</button>
+          : <button onClick={guardar} disabled={!imgNat} style={{ padding:'9px 24px', borderRadius:8, border:'none', background: imgNat ? '#4f46e5' : '#555', color:'#fff', cursor: imgNat ? 'pointer' : 'not-allowed', fontSize:14, fontWeight:600 }}>✓ Guardar encuadre</button>
+        }
         <button onClick={onCerrar} style={{ padding:'9px 18px', borderRadius:8, border:'1px solid rgba(255,255,255,0.3)', background:'transparent', color:'#fff', cursor:'pointer', fontSize:14 }}>Cancelar</button>
       </div>
     </div>
@@ -348,7 +361,8 @@ function FotoParticipante({ participante: p, onFotoChange }) {
   const [visorFull, setVisorFull] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [cropSrc, setCropSrc] = useState(null)
+  const [cropSrc, setCropSrc]   = useState(null)
+  const [cropBlob, setCropBlob] = useState(null)
   const fileRef = useRef()
 
   async function subirFoto(e) {
@@ -369,6 +383,7 @@ function FotoParticipante({ participante: p, onFotoChange }) {
         if (r.ok) onFotoChange(r.foto_url)
         else alert('Error al guardar: ' + (r.error || 'desconocido'))
       } else {
+        setCropBlob(foto)
         setCropSrc(URL.createObjectURL(foto))
       }
     } catch(err) { alert('Error: ' + err.message) }
@@ -447,8 +462,9 @@ function FotoParticipante({ participante: p, onFotoChange }) {
       {cropSrc && (
         <EditorCrop
           src={cropSrc}
+          fallback={cropBlob}
           onGuardar={subirBlobCroppeado}
-          onCerrar={() => { URL.revokeObjectURL(cropSrc); setCropSrc(null) }}
+          onCerrar={() => { URL.revokeObjectURL(cropSrc); setCropSrc(null); setCropBlob(null) }}
         />
       )}
     </>
