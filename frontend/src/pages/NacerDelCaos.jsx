@@ -770,7 +770,7 @@ function TarjetaCamada({ c, onSeleccionar, onEditar, onEliminar }) {
 }
 
 // ─── Sección Camadas ─────────────────────────────────────────────────────────
-function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
+function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChange }) {
   const [camadas, setCamadas] = useState([])
   const [seleccionada, setSeleccionada] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -938,6 +938,10 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
   const camadasVis = camadasSinEgresados
 
   useEffect(() => {
+    onCamadaChange?.(seleccionada)
+  }, [seleccionada])
+
+  useEffect(() => {
     setTabPrincipal(tabExterno)
     if (tabExterno !== 'egresados') setSeleccionada(null)
   }, [tabExterno])
@@ -999,7 +1003,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
       {seleccionada && (
         <div>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-            <button onClick={() => { if (tabExterno === 'egresados') { onSalirEgresados?.() } else { setSeleccionada(null) } }} style={btnSec}>← Volver</button>
+            <button onClick={() => { if (tabExterno === 'egresados') { onSalirEgresados?.() } else { setSeleccionada(null) } }} style={{ fontSize:13, fontWeight:600, padding:'7px 18px', borderRadius:8, border:'none', background:'#1a1a2e', color:'#fff', cursor:'pointer' }}>← Volver</button>
             <button onClick={() => { setEditCamada(seleccionada); setSeleccionada(null); setShowForm(true); setTabPrincipal('camadas') }} style={{ ...btnSec, display:'flex', alignItems:'center', gap:4 }}>✏️ Editar camada</button>
           </div>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
@@ -1482,6 +1486,11 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados }) {
               </div>
             </div>
           )}
+
+          {/* Botón volver al final */}
+          <div style={{ marginTop:28, paddingTop:16, borderTop:'1px solid var(--border)' }}>
+            <button onClick={() => { if (tabExterno === 'egresados') { onSalirEgresados?.() } else { setSeleccionada(null) } }} style={{ fontSize:13, fontWeight:600, padding:'7px 18px', borderRadius:8, border:'none', background:'#1a1a2e', color:'#fff', cursor:'pointer' }}>← Volver a camadas</button>
+          </div>
         </div>
       )}
     </div>
@@ -2527,6 +2536,7 @@ export default function NacerDelCaos({ user }) {
   const [tab, setTab] = useState('camadas')
   const [stats, setStats] = useState({})
   const [visibilidad, setVisibilidad] = useState([])
+  const [camadaActiva, setCamadaActiva] = useState(null)
   const esAdmin = user?.rol === 'admin'
 
   useEffect(() => { api.get('/api/ndc/stats').then(setStats) }, [tab])
@@ -2560,7 +2570,7 @@ export default function NacerDelCaos({ user }) {
 
   return (
     <div>
-      <CuadroDinamico stats={stats} />
+      {!camadaActiva && <CuadroDinamico stats={stats} />}
 
       <BuscadorGlobal />
 
@@ -2578,7 +2588,7 @@ export default function NacerDelCaos({ user }) {
       </div>
 
       <div style={{display: (tab==='camadas'||tab==='egresados')?'block':'none'}}>
-        <SeccionCamadas tabExterno={tab==='egresados'?'egresados':'camadas'} onSalirEgresados={()=>setTab('camadas')} />
+        <SeccionCamadas tabExterno={tab==='egresados'?'egresados':'camadas'} onSalirEgresados={()=>setTab('camadas')} onCamadaChange={setCamadaActiva} />
       </div>
       <div style={{display: tab==='donantes'?'block':'none'}}><SeccionDonantes /></div>
       <div style={{display: tab==='materiales'?'block':'none'}}><SeccionMateriales /></div>
