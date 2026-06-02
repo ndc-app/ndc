@@ -804,6 +804,8 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
   const [formEsAbierto, setFormEsAbierto] = useState(false)
   const [lugarEdit, setLugarEdit] = useState(false)
   const [lugarVal, setLugarVal] = useState('')
+  const [frecuenciaEdit, setFrecuenciaEdit] = useState(false)
+  const [frecuenciaVal, setFrecuenciaVal] = useState('')
   const [formE, setFormE] = useState({ fecha: new Date().toISOString().slice(0,10), actividad:'', presentes:0, notas:'' })
   const [formH, setFormH] = useState({ tipo:'mural', titulo:'', fecha:'', lugar:'', descripcion:'' })
   const [editHito, setEditHito] = useState(null)
@@ -873,6 +875,14 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
     setSeleccionada(updated)
     setCamadas(cs => cs.map(c => c.id === seleccionada.id ? updated : c))
     setLugarEdit(false)
+  }
+
+  async function guardarFrecuencia() {
+    const updated = { ...seleccionada, frecuencia: frecuenciaVal }
+    await api.put(`/api/ndc/camadas/${seleccionada.id}`, updated)
+    setSeleccionada(updated)
+    setCamadas(cs => cs.map(c => c.id === seleccionada.id ? updated : c))
+    setFrecuenciaEdit(false)
   }
 
   async function toggleEgresado(p) {
@@ -1035,6 +1045,22 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
                       title="Click para editar sede"
                       style={{ cursor:'pointer', color: seleccionada.lugar?'var(--text2)':'var(--text3)', fontStyle: seleccionada.lugar?'normal':'italic' }}>
                       {seleccionada.lugar || '+ agregar sede'}
+                    </span>
+                }
+              </div>
+              <div style={{ marginTop:3, fontSize:12, display:'flex', alignItems:'center', gap:5 }}>
+                <span style={{ color:'var(--text3)' }}>🗓️</span>
+                {frecuenciaEdit
+                  ? <input autoFocus value={frecuenciaVal}
+                      onChange={e=>setFrecuenciaVal(e.target.value)}
+                      onBlur={guardarFrecuencia}
+                      onKeyDown={e=>{ if(e.key==='Enter') guardarFrecuencia(); if(e.key==='Escape') setFrecuenciaEdit(false) }}
+                      placeholder="Ej: miércoles y viernes 16–19 hs"
+                      style={{ fontSize:12, border:'1px solid var(--border2)', borderRadius:4, padding:'1px 7px', background:'var(--bg3)', color:'var(--text)', width:240 }} />
+                  : <span onClick={()=>{ setFrecuenciaVal(seleccionada.frecuencia||''); setFrecuenciaEdit(true) }}
+                      title="Click para editar frecuencia"
+                      style={{ cursor:'pointer', color: seleccionada.frecuencia?'var(--text2)':'var(--text3)', fontStyle: seleccionada.frecuencia?'normal':'italic' }}>
+                      {seleccionada.frecuencia || '+ agregar días y horarios'}
                     </span>
                 }
               </div>

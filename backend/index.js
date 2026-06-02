@@ -114,6 +114,7 @@ db.prepare(`CREATE TABLE IF NOT EXISTS ndc_participantes (
 )`).run()
 try { db.prepare('ALTER TABLE ndc_participantes ADD COLUMN scholas_id INTEGER').run() } catch(e) {}
 try { db.prepare('ALTER TABLE ndc_participantes ADD COLUMN orden INTEGER DEFAULT 0').run() } catch(e) {}
+try { db.prepare('ALTER TABLE ndc_camadas ADD COLUMN frecuencia TEXT').run() } catch(e) {}
 
 // Encuentros
 db.prepare(`CREATE TABLE IF NOT EXISTS ndc_encuentros (
@@ -431,8 +432,8 @@ app.post('/api/ndc/camadas', requireAuth, (req, res) => {
 
 app.put('/api/ndc/camadas/:id', requireAuth, (req, res) => {
   const b = req.body
-  db.prepare(`UPDATE ndc_camadas SET nombre=?,sede=?,pais=?,anio=?,mes_inicio=?,mes_fin=?,estado=?,descripcion=?,participantes_esperados=?,cantidad_escuelas=?,cantidad_dias=?,participantes_reales=?,fecha_inicio_real=?,fecha_fin_real=?,tamano_equipo=?,lugar=? WHERE id=?`)
-    .run(b.nombre,b.sede,b.pais,b.anio,b.mes_inicio,b.mes_fin,b.estado,b.descripcion,b.participantes_esperados,b.cantidad_escuelas||0,b.cantidad_dias||0,b.participantes_reales||0,b.fecha_inicio_real||null,b.fecha_fin_real||null,b.tamano_equipo||0,b.lugar||null,req.params.id)
+  db.prepare(`UPDATE ndc_camadas SET nombre=?,sede=?,pais=?,anio=?,mes_inicio=?,mes_fin=?,estado=?,descripcion=?,participantes_esperados=?,cantidad_escuelas=?,cantidad_dias=?,participantes_reales=?,fecha_inicio_real=?,fecha_fin_real=?,tamano_equipo=?,lugar=?,frecuencia=? WHERE id=?`)
+    .run(b.nombre,b.sede,b.pais,b.anio,b.mes_inicio,b.mes_fin,b.estado,b.descripcion,b.participantes_esperados,b.cantidad_escuelas||0,b.cantidad_dias||0,b.participantes_reales||0,b.fecha_inicio_real||null,b.fecha_fin_real||null,b.tamano_equipo||0,b.lugar||null,b.frecuencia||null,req.params.id)
   res.json({ ok:true })
 })
 
