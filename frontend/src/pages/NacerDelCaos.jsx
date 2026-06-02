@@ -769,6 +769,17 @@ function TarjetaCamada({ c, onSeleccionar, onEditar, onEliminar }) {
   )
 }
 
+// ─── Hook mobile ─────────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [v, setV] = useState(() => window.innerWidth < 640)
+  useEffect(() => {
+    const h = () => setV(window.innerWidth < 640)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
+  return v
+}
+
 // ─── Sección Camadas ─────────────────────────────────────────────────────────
 function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChange }) {
   const [camadas, setCamadas] = useState([])
@@ -802,6 +813,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
   const [draggingId, setDraggingId] = useState(null)
   const [dragOverId, setDragOverId] = useState(null)
   const dragRef = useRef({ active: false, pid: null })
+  const isMobile = useIsMobile()
   const dragOverRef = useRef(null)
   const cardRefsP = useRef({})
 
@@ -956,7 +968,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
   const formCamada = (
     <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:12, padding:16, marginBottom:14 }}>
       <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>{editCamada ? `Editar: ${editCamada.nombre}` : 'Nueva camada'}</div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:8 }}>
+      <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3,1fr)', gap:8, marginBottom:8 }}>
         <div><label style={{fontSize:11,color:'var(--text3)'}}>Nombre</label><input style={input} value={form.nombre} onChange={e=>setForm(f=>({...f,nombre:e.target.value}))} /></div>
         <div><label style={{fontSize:11,color:'var(--text3)'}}>Sede</label><input style={input} value={form.sede} onChange={e=>setForm(f=>({...f,sede:e.target.value}))} /></div>
         <div><label style={{fontSize:11,color:'var(--text3)'}}>País</label><input style={input} value={form.pais} onChange={e=>setForm(f=>({...f,pais:e.target.value}))} /></div>
@@ -1046,7 +1058,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
           </div>
 
           {/* SubTabs */}
-          <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:16, flexWrap:'wrap' }}>
+          <div className="ndc-tabs" style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:16 }}>
             {[['participantes','👥 Participantes'],['escuelas','🏫 Escuelas'],['hitos','🎨 Hitos'],['presupuesto','💰 Presupuesto']].map(([id,label]) => (
               <button key={id} onClick={()=>setSubTab(id)} style={{ padding:'7px 16px', fontSize:12, fontWeight:subTab===id?600:400, border:'none', borderBottom:subTab===id?'2px solid #1a1a2e':'2px solid transparent', background:'none', cursor:'pointer', color:subTab===id?'var(--text)':'var(--text3)', marginBottom:-1 }}>{label}</button>
             ))}
@@ -1062,7 +1074,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
                   <span style={{ fontSize:10 }}>{formPAbierto ? '▲' : '▼'}</span>
                 </div>
                 {formPAbierto && <div style={{ padding:'0 12px 12px' }}>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:6 }}>
+                <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap:6, marginBottom:6 }}>
                   <div><label style={{fontSize:10,color:'var(--text3)'}}>Apodo</label><input style={input} value={formP.apodo} onChange={e=>setFormP(f=>({...f,apodo:e.target.value}))} placeholder="Ninfa, Cosmos…" /></div>
                   <div><label style={{fontSize:10,color:'var(--text3)'}}>Nombre</label><input style={input} value={formP.nombre} onChange={e=>setFormP(f=>({...f,nombre:e.target.value}))} /></div>
                   <div><label style={{fontSize:10,color:'var(--text3)'}}>Apellido</label><input style={input} value={formP.apellido} onChange={e=>setFormP(f=>({...f,apellido:e.target.value}))} /></div>
@@ -1188,6 +1200,12 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
                         {(p.telefono || p.email) && <div style={{ fontSize:11, color:'var(--text3)' }}>{p.telefono && `📱 ${p.telefono}`}{p.telefono && p.email && ' · '}{p.email && `✉️ ${p.email}`}</div>}
                         {p.testimonio && <div style={{ fontSize:11, color:'var(--text3)', fontStyle:'italic', marginTop:2 }}>"{p.testimonio.slice(0,100)}{p.testimonio.length>100?'…':''}"</div>}
                         {p.comentario && <div style={{ fontSize:11, color:'var(--amber)', background:'var(--amber-bg,#2a2000)', borderRadius:4, padding:'2px 7px', marginTop:2, display:'inline-block' }}>💬 {p.comentario.slice(0,120)}{p.comentario.length>120?'…':''}</div>}
+                        {isMobile && (p.padre_madre || p.contacto_responsable) && (
+                          <div style={{ fontSize:11, color:'var(--text3)', display:'flex', gap:10, flexWrap:'wrap', marginTop:2 }}>
+                            {(p.padre_madre || p.responsable) && <span>👤 {p.padre_madre || p.responsable}</span>}
+                            {p.contacto_responsable && <span>📞 {p.contacto_responsable}</span>}
+                          </div>
+                        )}
                         <div style={{ display:'flex', gap:6, marginTop:4, alignItems:'center' }}>
                           <button onClick={()=>toggleEgresado(p)} style={{ fontSize:11, padding:'3px 10px', borderRadius:6, border:`1px solid ${p.egresado?'#3B6D11':'var(--border2)'}`, background: p.egresado?'#EAF3DE':'transparent', color: p.egresado?'#1A4D00':'var(--text3)', cursor:'pointer' }}>
                             {p.egresado ? '🎓 Egresado' : '○ Terminó'}
@@ -1203,8 +1221,8 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
                           <button onClick={async()=>{ if(window.confirm('¿Eliminar?')){ await api.del(`/api/ndc/participantes/${p.id}`); setParticipantes(await api.get(`/api/ndc/participantes?camada_id=${seleccionada.id}`)) }}} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#991a1a'}}>🗑️</button>
                         </div>
                       </div>
-                      {/* Derecha: responsable */}
-                      {(p.padre_madre || p.responsable || p.contacto_responsable || p.tutor_mail) && (
+                      {/* Derecha: responsable (desktop) / abajo (mobile) */}
+                      {!isMobile && (p.padre_madre || p.responsable || p.contacto_responsable || p.tutor_mail) && (
                         <div style={{ borderLeft:'1px solid var(--border)', paddingLeft:10, maxWidth:180, minWidth:0, flexShrink:1 }}>
                           <div style={{ fontSize:10, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4, textAlign:'right' }}>Responsable</div>
                           <div style={{ fontSize:11, color:'var(--text2)', display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end', wordBreak:'break-word', overflowWrap:'anywhere' }}>
@@ -1220,7 +1238,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
                       <div ref={el => el && el.scrollIntoView({behavior:'smooth', block:'nearest'})}
                         style={{ background:'var(--bg3)', border:'1px solid var(--border2)', borderTop:'none', borderRadius:'0 0 8px 8px', padding:'12px 14px' }}>
                         <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:10 }}>Editando datos de {editParticipante.apodo || editParticipante.nombre}</div>
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:6 }}>
+                        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap:6, marginBottom:6 }}>
                           <div><label style={{fontSize:10,color:'var(--text3)'}}>Apodo</label><input style={input} value={formP.apodo} onChange={e=>setFormP(f=>({...f,apodo:e.target.value}))} placeholder="Ninfa, Cosmos…" /></div>
                           <div><label style={{fontSize:10,color:'var(--text3)'}}>Nombre</label><input style={input} value={formP.nombre} onChange={e=>setFormP(f=>({...f,nombre:e.target.value}))} /></div>
                           <div><label style={{fontSize:10,color:'var(--text3)'}}>Apellido</label><input style={input} value={formP.apellido} onChange={e=>setFormP(f=>({...f,apellido:e.target.value}))} /></div>
@@ -1265,7 +1283,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
                   {!editEscuela && <span style={{ fontSize:10 }}>{formEsAbierto ? '▲' : '▼'}</span>}
                 </div>
                 {(formEsAbierto || editEscuela) && <div style={{ padding:'0 12px 12px' }}>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, marginBottom:6 }}>
+                  <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap:6, marginBottom:6 }}>
                     <div style={{gridColumn:'1/-1'}}><label style={{fontSize:10,color:'var(--text3)'}}>Nombre *</label><input style={input} value={formEs.nombre} onChange={e=>setFormEs(f=>({...f,nombre:e.target.value}))} placeholder="Nombre de la institución" /></div>
                     <div><label style={{fontSize:10,color:'var(--text3)'}}>Localidad</label><input style={input} value={formEs.localidad} onChange={e=>setFormEs(f=>({...f,localidad:e.target.value}))} /></div>
                     <div style={{gridColumn:'2/-1'}}><label style={{fontSize:10,color:'var(--text3)'}}>Dirección</label><input style={input} value={formEs.direccion} onChange={e=>setFormEs(f=>({...f,direccion:e.target.value}))} /></div>
@@ -1313,7 +1331,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
           {/* Encuentros */}
           {subTab === 'encuentros' && (
             <div>
-              <div style={{ display:'grid', gridTemplateColumns:'120px 1fr 80px 1fr auto', gap:8, marginBottom:12, background:'var(--bg3)', padding:12, borderRadius:8, alignItems:'end' }}>
+              <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '120px 1fr 80px 1fr auto', gap:8, marginBottom:12, background:'var(--bg3)', padding:12, borderRadius:8, alignItems:'end' }}>
                 <div><label style={{fontSize:11,color:'var(--text3)'}}>Fecha</label><input style={input} type="date" value={formE.fecha} onChange={e=>setFormE(f=>({...f,fecha:e.target.value}))} /></div>
                 <div><label style={{fontSize:11,color:'var(--text3)'}}>Actividad</label><input style={input} value={formE.actividad} onChange={e=>setFormE(f=>({...f,actividad:e.target.value}))} /></div>
                 <div><label style={{fontSize:11,color:'var(--text3)'}}>Presentes</label><input style={input} type="number" value={formE.presentes} onChange={e=>setFormE(f=>({...f,presentes:parseInt(e.target.value)||0}))} /></div>
@@ -1396,7 +1414,7 @@ function SeccionCamadas({ tabExterno = 'camadas', onSalirEgresados, onCamadaChan
           {/* Presupuesto */}
           {subTab === 'presupuesto' && (
             <div>
-              <div style={{ display:'grid', gridTemplateColumns:'120px 1fr 100px 80px 100px auto', gap:8, marginBottom:12, background:'var(--bg3)', padding:12, borderRadius:8, alignItems:'end' }}>
+              <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '120px 1fr 100px 80px 100px auto', gap:8, marginBottom:12, background:'var(--bg3)', padding:12, borderRadius:8, alignItems:'end' }}>
                 <div><label style={{fontSize:11,color:'var(--text3)'}}>Categoría</label>
                   <select style={input} value={formPres.categoria} onChange={e=>setFormPres(f=>({...f,categoria:e.target.value}))}>
                     {['materiales','facilitadores','espacio','comunicacion','transporte','alimentacion','otro'].map(c=><option key={c} value={c}>{c}</option>)}
@@ -2575,7 +2593,7 @@ export default function NacerDelCaos({ user }) {
       <BuscadorGlobal />
 
       {/* Tabs */}
-      <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:20 }}>
+      <div className="ndc-tabs" style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:20 }}>
         {TABS.map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} style={{
             padding:'9px 20px', fontSize:13, fontWeight: tab===id ? 600 : 400,

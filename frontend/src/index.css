@@ -342,3 +342,18 @@ td:first-child { color: var(--text); }
 @media (max-width: 480px) {
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 }
+
+/* ─── NDC Mobile ─── */
+@media (max-width: 640px) {
+  body { overflow-x: hidden; }
+  .ndc-content { padding: 10px !important; }
+}
+
+.ndc-tabs {
+  overflow-x: auto;
+  flex-wrap: nowrap !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 1px;
+}
+.ndc-tabs::-webkit-scrollbar { display: none; }

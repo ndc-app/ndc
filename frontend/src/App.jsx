@@ -365,7 +365,7 @@ export default function App() {
       </div>
 
       {/* Contenido */}
-      <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
+      <div className="ndc-content" style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
         <NacerDelCaos user={user} />
       </div>
 
