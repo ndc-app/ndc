@@ -249,14 +249,24 @@ function EditorEncuadre({ src, posicion, aspecto = 16/9, onGuardar, onCerrar }) 
 // ─── Editor de recorte con zoom ──────────────────────────────────────────────
 function EditorCrop({ src, onGuardar, onCerrar, fallback, cropW: CROP_W = 264, cropH: CROP_H = 352, outW: OUT_W = 480, outH: OUT_H = 640 }) {
 
-  const imgRef  = useRef()
-  const drag    = useRef({ on:false, lx:0, ly:0 })
-  const pinch   = useRef({ on:false, ld:0, lz:1 })
+  const imgRef   = useRef()
+  const cropRef  = useRef()
+  const drag     = useRef({ on:false, lx:0, ly:0 })
+  const pinch    = useRef({ on:false, ld:0, lz:1 })
+  const zoomRef  = useRef(1)
   const [imgNat, setImgNat]   = useState(null)
   const [imgError, setImgError] = useState(false)
-  const [zoom, setZoom]       = useState(1)
+  const [zoom, setZoomState]  = useState(1)
   const [panX, setPanX]       = useState(0)
   const [panY, setPanY]       = useState(0)
+
+  function setZoom(fn) {
+    setZoomState(z => {
+      const nz = typeof fn === 'function' ? fn(z) : fn
+      zoomRef.current = nz
+      return nz
+    })
+  }
 
   const base = imgNat ? Math.max(CROP_W / imgNat.w, CROP_H / imgNat.h) : 1
   const eff  = base * zoom
@@ -279,25 +289,48 @@ function EditorCrop({ src, onGuardar, onCerrar, fallback, cropW: CROP_W = 264, c
     drag.current.lx = e.clientX; drag.current.ly = e.clientY
   }
   function mup() { drag.current.on = false }
+  function mwheel(e) {
+    e.preventDefault()
+    setZoom(z => Math.max(1, Math.min(5, z - e.deltaY * 0.001)))
+  }
 
-  function tstart(e) {
-    if (e.touches.length === 1) {
-      drag.current = { on:true, lx:e.touches[0].clientX, ly:e.touches[0].clientY }
-    } else if (e.touches.length === 2) {
-      drag.current.on = false
-      pinch.current = { on:true, ld:Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY), lz:zoom }
+  useEffect(() => {
+    const el = cropRef.current
+    if (!el) return
+    function tstart(e) {
+      e.preventDefault()
+      if (e.touches.length === 1) {
+        drag.current = { on:true, lx:e.touches[0].clientX, ly:e.touches[0].clientY }
+      } else if (e.touches.length === 2) {
+        drag.current.on = false
+        pinch.current = { on:true, ld:Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY), lz:zoomRef.current }
+      }
     }
-  }
-  function tmove(e) {
-    if (e.touches.length === 1 && drag.current.on) {
-      bump(e.touches[0].clientX - drag.current.lx, e.touches[0].clientY - drag.current.ly)
-      drag.current.lx = e.touches[0].clientX; drag.current.ly = e.touches[0].clientY
-    } else if (e.touches.length === 2 && pinch.current.on) {
-      const d = Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY)
-      setZoom(Math.max(1, Math.min(5, pinch.current.lz * d / pinch.current.ld)))
+    function tmove(e) {
+      e.preventDefault()
+      if (e.touches.length === 1 && drag.current.on) {
+        const dx = e.touches[0].clientX - drag.current.lx
+        const dy = e.touches[0].clientY - drag.current.ly
+        setPanX(x => Math.max(-999, Math.min(999, x + dx)))
+        setPanY(y => Math.max(-999, Math.min(999, y + dy)))
+        drag.current.lx = e.touches[0].clientX; drag.current.ly = e.touches[0].clientY
+      } else if (e.touches.length === 2 && pinch.current.on) {
+        const d = Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY)
+        const nz = Math.max(1, Math.min(5, pinch.current.lz * d / pinch.current.ld))
+        zoomRef.current = nz
+        setZoomState(nz)
+      }
     }
-  }
-  function tend() { drag.current.on = false; pinch.current.on = false }
+    function tend() { drag.current.on = false; pinch.current.on = false }
+    el.addEventListener('touchstart', tstart, { passive:false })
+    el.addEventListener('touchmove',  tmove,  { passive:false })
+    el.addEventListener('touchend',   tend,   { passive:true  })
+    return () => {
+      el.removeEventListener('touchstart', tstart)
+      el.removeEventListener('touchmove',  tmove)
+      el.removeEventListener('touchend',   tend)
+    }
+  }, [])
 
   function guardar() {
     const img = imgRef.current
@@ -310,17 +343,17 @@ function EditorCrop({ src, onGuardar, onCerrar, fallback, cropW: CROP_W = 264, c
     canvas.toBlob(blob => blob ? onGuardar(blob) : alert('Error al recortar'), 'image/jpeg', 0.88)
   }
 
-  const btn = { fontSize:22, background:'rgba(255,255,255,0.12)', border:'none', color:'#fff', borderRadius:8, width:44, height:44, cursor:'pointer', lineHeight:1 }
+  const btn = { fontSize:22, background:'rgba(255,255,255,0.12)', border:'none', color:'#fff', borderRadius:8, width:48, height:48, cursor:'pointer', lineHeight:1, touchAction:'manipulation' }
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:700, background:'rgba(0,0,0,0.96)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
-      <div style={{ color:'rgba(255,255,255,0.5)', fontSize:12 }}>Arrastrá para mover · Pellizco para acercar</div>
-      <div
-        style={{ position:'relative', width:CROP_W, height:CROP_H, overflow:'hidden', border:'2px solid rgba(255,255,255,0.8)', borderRadius:6, cursor:'grab', touchAction:'none', userSelect:'none' }}
+      <div style={{ color:'rgba(255,255,255,0.5)', fontSize:12 }}>Arrastrá para mover · Pellizco o +/− para zoom</div>
+      <div ref={cropRef}
+        style={{ position:'relative', width:CROP_W, height:CROP_H, overflow:'hidden', border:'2px solid rgba(255,255,255,0.8)', borderRadius:6, cursor:'grab', userSelect:'none' }}
         onMouseDown={mdown} onMouseMove={mmove} onMouseUp={mup} onMouseLeave={mup}
-        onTouchStart={tstart} onTouchMove={tmove} onTouchEnd={tend}
+        onWheel={mwheel}
       >
-        <img ref={imgRef} src={src} draggable={false} alt=""
+        <img ref={imgRef} src={src} draggable={false} alt="" crossOrigin="anonymous"
           onLoad={() => { const i = imgRef.current; i && setImgNat({ w:i.naturalWidth, h:i.naturalHeight }) }}
           onError={() => setImgError(true)}
           style={{ position:'absolute', left:Math.round((CROP_W-dw)/2+cx), top:Math.round((CROP_H-dh)/2+cy), width:Math.round(dw), height:Math.round(dh), pointerEvents:'none', display: imgError ? 'none' : 'block' }}
@@ -333,10 +366,10 @@ function EditorCrop({ src, onGuardar, onCerrar, fallback, cropW: CROP_W = 264, c
         )}
       </div>
       {!imgError && (
-        <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-          <button style={btn} onClick={() => setZoom(z => Math.max(1, z-0.2))}>−</button>
-          <span style={{ color:'rgba(255,255,255,0.5)', fontSize:12, width:44, textAlign:'center' }}>{Math.round(zoom*100)}%</span>
-          <button style={btn} onClick={() => setZoom(z => Math.min(5, z+0.2))}>+</button>
+        <div style={{ display:'flex', gap:16, alignItems:'center' }}>
+          <button style={btn} onClick={() => setZoom(z => Math.max(1, z-0.25))}>−</button>
+          <span style={{ color:'rgba(255,255,255,0.7)', fontSize:13, width:52, textAlign:'center', fontWeight:600 }}>{Math.round(zoom*100)}%</span>
+          <button style={btn} onClick={() => setZoom(z => Math.min(5, z+0.25))}>+</button>
         </div>
       )}
       <div style={{ display:'flex', gap:10 }}>
