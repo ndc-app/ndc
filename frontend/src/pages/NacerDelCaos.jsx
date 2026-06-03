@@ -558,7 +558,7 @@ function TarjetaHito({ hito: h, onDelete, onEdit, onImagenChange }) {
         {h.imagen_url
           ? <div style={{ position:'relative', aspectRatio:'16/9', overflow:'hidden', cursor:'zoom-in' }} onClick={() => setVisor(true)}>
               <img src={`${BASE}/uploads/hitos/${h.imagen_url}`} alt={h.titulo}
-                style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: posicion, display:'block', transition:'transform .3s' }}
+                style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: h.imagen_posicion || '50% 50%', display:'block', transition:'transform .3s' }}
                 onMouseEnter={e => e.target.style.transform='scale(1.03)'}
                 onMouseLeave={e => e.target.style.transform='scale(1)'} />
               <div style={{ position:'absolute', bottom:6, right:6, display:'flex', gap:4 }} onClick={e=>e.stopPropagation()}>
